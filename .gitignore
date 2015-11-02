@@ -18,3 +18,6 @@ site.exp
 
 # Site file for llvm-lit
 lit.site.cfg
+
+# Project files
+*.cproject
