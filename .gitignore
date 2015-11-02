@@ -21,3 +21,4 @@ lit.site.cfg
 
 # Project files
 *.cproject
+*.project
