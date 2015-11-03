@@ -1465,8 +1465,8 @@ int main(int argc, char **argv, char **envp) {
 //	part of stastic info
 	std::string ErrorInfo;
 	raw_fd_ostream out_to_file("./output_info/statics.txt", ErrorInfo, 0x0202);
-	out_to_file << "Inst:" << instructions << "\n";
 	out_to_file << "TimeCost:" << cost << "\n";
+	out_to_file << "Insts:" << instructions << "\n";
 	out_to_file.close();
 
 	stats << "\n";

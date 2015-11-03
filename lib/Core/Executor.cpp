@@ -3194,14 +3194,6 @@ void Executor::run(ExecutionState &initialState) {
 		}
 	}
 
-	if (isSymbolicRun) {
-		for (std::vector<BitcodeListener*>::iterator bit =
-				bitcodeListeners.begin(), bie = bitcodeListeners.end();
-				bit != bie; ++bit) {
-			(*bit)->testForKquery2Z3();
-		}
-	}
-
 	if (1) {
 		for (std::vector<BitcodeListener*>::iterator bit =
 				bitcodeListeners.begin(), bie = bitcodeListeners.end();

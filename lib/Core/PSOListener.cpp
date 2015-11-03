@@ -108,8 +108,8 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 	KModule* kmodule = executor->kmodule;
 	lastEvent = NULL;
 
-	cerr << "thread id : " << thread->threadId << " line : " << ki->info->line;
-	inst->dump();
+//	cerr << "thread id : " << thread->threadId << " line : " << ki->info->line;
+//	inst->dump();
 
 	// filter the instruction linked by klee force-import such as klee_div_zero_check
 	if (kmodule->kleeFunctions.find(inst->getParent()->getParent())
