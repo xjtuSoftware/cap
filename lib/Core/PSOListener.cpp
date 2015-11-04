@@ -602,7 +602,7 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 					item->globalVarFullName = varFullName;
 					item->varName = varName;
 //					cerr << varName << "\n";
-#ifdef PTR
+#if PTR
 					if (item->isGlobal) {
 #else
 					if (!inst->getType()->isPointerTy() && item->isGlobal) {
@@ -668,7 +668,7 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 				}
 				item->globalVarFullName = varFullName;
 				item->varName = varName;
-#ifdef PTR
+#if PTR
 				if (item->isGlobal) {
 #else
 				if (!inst->getOperand(0)->getType()->isPointerTy() && item->isGlobal) {
@@ -1790,7 +1790,7 @@ void PSOListener::beforeSymbolicRun(ExecutionState &state, KInstruction *ki) {
 				}
 			} else {
 				//会丢失指针的一些关系约束，但是不影响。
-				if (id == Type::PointerTyID) {
+				if (id == Type::PointerTyID && PTR) {
 					if (value->getKind() == Expr::Concat){
 						ref<Expr> svalue = symbolicMap[filter.getFullName(value)];
 						if (svalue->getKind() != Expr::Constant) {
@@ -2010,7 +2010,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 			}
 			if ((*currentEvent)->isGlobal) {
 				//指针！！！
-#ifdef PTR
+#if PTR
 				if (isFloat || id == Type::IntegerTyID || id == Type::PointerTyID) {
 #else
 				if (isFloat || id == Type::IntegerTyID) {
@@ -2027,7 +2027,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 				}
 			} else {
 				//会丢失指针的一些关系约束，但是不影响。
-				if (id == Type::PointerTyID) {
+				if (id == Type::PointerTyID && PTR) {
 					ref<Expr> address = executor->eval(ki, 0, thread).value;
 					for (std::map<ref<Expr>, ref<Expr> >::iterator it = addressSymbolicMap.begin(), ie =
 							addressSymbolicMap.end(); it != ie; ++it) {
