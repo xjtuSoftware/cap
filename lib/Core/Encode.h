@@ -49,6 +49,34 @@ public:
 	void check_output();
 	void check_if();
 	bool verify();
+	//add for harmful data race detection
+	//in order to use in data race insert here.
+	struct globalEvent {
+		Event *preEvent;
+		Event *event;
+		Event *postEvent;
+	};
+	struct racePair {
+		struct globalEvent event1;
+		struct globalEvent event2;
+	};
+	struct Pair {
+		int order; //the order of a event
+		Event *event;
+	};
+
+	void printEventSeq(vector<Event *> &eventSequence);
+	void buildRaceFormula();
+	void addBrConstraint();
+	void buildRaceTrace();
+	void getRaceCandidate(vector<struct globalEvent> &readGlobalSet,
+			vector<struct globalEvent> &writeGlobalSet);
+	void raceFromCandidate(vector<struct racePair> &raceCandidate);
+	void getAltSequence(vector<struct Pair> &, struct racePair &, int);
+	void getPossibleRaceTrace();
+	void getEventSequence(vector<struct Pair> &, vector<Event *> &, Event *, Event *);
+	void exchangeUnderEqual(vector<struct Pair> &, struct racePair &);
+
 
 private:
 

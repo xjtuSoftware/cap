@@ -108,8 +108,8 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 	KModule* kmodule = executor->kmodule;
 	lastEvent = NULL;
 
-	cerr << "thread id : " << thread->threadId << " line : " << ki->info->line;
-	inst->dump();
+//	cerr << "thread id : " << thread->threadId << " line : " << ki->info->line;
+//	inst->dump();
 
 	// filter the instruction linked by klee force-import such as klee_div_zero_check
 	if (kmodule->kleeFunctions.find(inst->getParent()->getParent())
@@ -602,7 +602,7 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 					item->globalVarFullName = varFullName;
 					item->varName = varName;
 //					cerr << varName << "\n";
-#ifdef PTR
+#if PTR
 					if (item->isGlobal) {
 #else
 					if (!inst->getType()->isPointerTy() && item->isGlobal) {
@@ -668,7 +668,7 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 				}
 				item->globalVarFullName = varFullName;
 				item->varName = varName;
-#ifdef PTR
+#if PTR
 				if (item->isGlobal) {
 #else
 				if (!inst->getOperand(0)->getType()->isPointerTy() && item->isGlobal) {
@@ -948,7 +948,7 @@ void PSOListener::afterRunMethodAsMain() {
 		} else if (!rdManager.isCurrentTraceUntested()) {
 			rdManager.getCurrentTrace()->traceType = Trace::REDUNDANT;
 			cerr << "######################本条路径为旧路径####################\n";
-			getNewPrefix();
+//			getNewPrefix();
 		} else {
 			executor->isSymbolicRun = 1;
 			std::map<std::string, std::vector<Event *> > &writeSet = trace->writeSet;
@@ -966,6 +966,7 @@ void PSOListener::afterRunMethodAsMain() {
 			}
 			rdManager.allGlobal += allGlobal;
 		}
+		getNewPrefix();
 	} else if (executor->isSymbolicRun == 1) {
 		rdManager.getCurrentTrace()->traceType = Trace::UNIQUE;
 		std::map<std::string, std::vector<Event *> > &writeSet = trace->writeSet;
@@ -986,15 +987,17 @@ void PSOListener::afterRunMethodAsMain() {
 		context ctx;
 		solver s(ctx);
 		Encode encode(rdManager, ctx, s);
-		encode.buildAllFormula();
+//		encode.buildAllFormula();
+		//call for build race formula
+		encode.getPossibleRaceTrace();
 #if EVENTS_DEBUG
 		//true: output to file; false: output to terminal
 		rdManager.printCurrentTrace(true);
 		//			encode.showInitTrace();//need to be modified
 #endif
-		if (encode.verify()) {
-			encode.check_if();
-		}
+//		if (encode.verify()) {
+//			encode.check_if();
+//		}
 		gettimeofday(&finish, NULL);
 		double cost = (double) (finish.tv_sec * 1000000UL + finish.tv_usec
 				- start.tv_sec * 1000000UL - start.tv_usec) / 1000000UL;
@@ -1639,12 +1642,25 @@ void PSOListener::printInstrcution(ExecutionState& state, KInstruction* ki) {
 
 void PSOListener::printPrefix() {
 	if (executor->prefix) {
+		vector<Event*>* orderedEventList = executor->prefix->getEventList();
+		unsigned size = orderedEventList->size();
 		string fileName = prefixDir + executor->prefix->getName() + ".txt";
 		string errorMsg;
-		raw_fd_ostream out(fileName.c_str(), errorMsg,
-				raw_fd_ostream::F_Append);
-		executor->prefix->print(out);
-		out.close();
+		raw_fd_ostream out_to_file(fileName.c_str(), errorMsg,
+//				raw_fd_ostream::F_Append
+				raw_fd_ostream::BLACK);
+		std::cerr << errorMsg;
+		for (unsigned i = 0; i < size; i++) {
+				Event* currEvent = orderedEventList->at(i);
+				out_to_file << currEvent->threadId << "---" << currEvent->eventName
+						<< "---"
+						<< currEvent->inst->inst->getParent()->getParent()->getName().str()
+						<< "---" << currEvent->inst->info->line << "---"
+						<< currEvent->condition << "---";
+				currEvent->inst->inst->print(out_to_file);
+				out_to_file << "\n";
+		}
+		out_to_file.close();
 		//prefix->print(cerr);
 	}
 }
@@ -1790,7 +1806,7 @@ void PSOListener::beforeSymbolicRun(ExecutionState &state, KInstruction *ki) {
 				}
 			} else {
 				//会丢失指针的一些关系约束，但是不影响。
-				if (id == Type::PointerTyID) {
+				if (id == Type::PointerTyID && PTR) {
 					if (value->getKind() == Expr::Concat){
 						ref<Expr> svalue = symbolicMap[filter.getFullName(value)];
 						if (svalue->getKind() != Expr::Constant) {
@@ -2010,7 +2026,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 			}
 			if ((*currentEvent)->isGlobal) {
 				//指针！！！
-#ifdef PTR
+#if PTR
 				if (isFloat || id == Type::IntegerTyID || id == Type::PointerTyID) {
 #else
 				if (isFloat || id == Type::IntegerTyID) {
@@ -2027,7 +2043,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 				}
 			} else {
 				//会丢失指针的一些关系约束，但是不影响。
-				if (id == Type::PointerTyID) {
+				if (id == Type::PointerTyID && PTR) {
 					ref<Expr> address = executor->eval(ki, 0, thread).value;
 					for (std::map<ref<Expr>, ref<Expr> >::iterator it = addressSymbolicMap.begin(), ie =
 							addressSymbolicMap.end(); it != ie; ++it) {
@@ -2196,7 +2212,7 @@ void PSOListener::afterprepareSymbolicRun(ExecutionState &initialState) {
 		it->get()->dump();
 	}
 #endif
-	filter.filterUseless(trace);
+//	filter.filterUseless(trace);
 #if DEBUGSYMBOLIC
 	std::cerr << "kQueryExpr = " << trace->kQueryExpr.size()
 	<< std::endl;

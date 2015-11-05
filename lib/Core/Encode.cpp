@@ -56,7 +56,7 @@
 #include <iomanip>
 #include "KQuery2Z3.h"
 
-#define FORMULA_DEBUG 0
+#define FORMULA_DEBUG 1
 #define BRANCH_INFO 1
 #define BUFFERSIZE 300
 #define BIT_WIDTH 64
@@ -66,6 +66,15 @@ using namespace llvm;
 using namespace std;
 using namespace z3;
 namespace klee {
+
+
+struct raceHappen {
+	Event *preEvent;
+	Event *event;
+	Event *postEvent;
+};
+
+
 
 struct Pair {
 	int order; //the order of a event
@@ -88,6 +97,505 @@ void Encode::buildAllFormula() {
 	//
 	cerr << "\nEncoding is over!\n";
 }
+
+
+
+void Encode::buildRaceFormula()
+{
+	buildInitValueFormula();
+	buildPathCondition();
+	buildMemoryModelFormula();
+	buildPartialOrderFormula();
+	buildReadWriteFormula();
+	buildSynchronizeFormula();
+}
+
+
+void Encode::printEventSeq(vector<Event *> &eventSequence)
+{
+	unsigned len = eventSequence.size();
+	for (unsigned i = 0; i < len; i++) {
+		cout << eventSequence[i]->threadId << " string:## "
+				<< eventSequence[i]->toString() << "\n";
+	}
+}
+
+void Encode::getRaceCandidate(vector<struct globalEvent> &readGlobalSet,
+		vector<struct globalEvent> &writeGlobalSet)
+{
+	vector<struct racePair> raceCandidate;
+	unsigned readLen = readGlobalSet.size();
+	unsigned writeLen = writeGlobalSet.size();
+	for (unsigned i = 0; i < readLen; i++) {
+		Event *event1 = readGlobalSet[i].event;
+		for (unsigned j = 0; j < writeLen; j++) {
+			Event *event2 = writeGlobalSet[j].event;
+			if ( (event1->threadId != event2->threadId)
+					&& (event1->varName == event2->varName) ) {
+				struct racePair pairTemp;
+				pairTemp.event1 = readGlobalSet[i];
+				pairTemp.event2 = writeGlobalSet[j];
+				raceCandidate.push_back(pairTemp);
+			}
+		}
+	}
+
+	for (unsigned k = 0; k < writeLen; k++) {
+		Event *event1 = writeGlobalSet[k].event;
+		for (unsigned t = k + 1; t < writeLen; t++) {
+			Event *event2 = writeGlobalSet[t].event;
+			if ( (event1->threadId != event2->threadId)
+					&& (event1->varName == event2->varName) ) {
+				struct racePair pairTemp;
+				pairTemp.event1 = writeGlobalSet[k];
+				pairTemp.event2 = writeGlobalSet[t];
+				raceCandidate.push_back(pairTemp);
+			}
+		}
+	}
+	raceFromCandidate(raceCandidate);
+}
+
+
+
+void Encode::getEventSequence(vector<struct Pair> &altSequence, vector<Event *> &eventSequence,
+		Event * event1, Event * event2)
+{
+	//bubble sort to get the altSequence.
+	//after bubble sort, then can get one of the execution trace.
+	vector<struct Pair>::size_type altLen = altSequence.size();
+	for (vector<struct Pair>::size_type index1 = 0; index1 < altLen - 1;
+				index1++) {
+		for (vector<struct Pair>::size_type index2 = 0;
+				index2 < altLen - index1 - 1; index2++) {
+			if (altSequence[index2].order > altSequence[index2 + 1].order) {
+					struct Pair temp = altSequence[index2];
+					altSequence[index2] = altSequence[index2 + 1];
+					altSequence[index2 + 1] = temp;
+			}
+		}
+	}
+	for (vector<struct Pair>::size_type index = 0; index < altLen;
+					index++) {
+		eventSequence.push_back(altSequence[index].event);
+		stringstream output;
+		output << "./output_info/" << event1->eventName << event2->eventName << ".z3expr";
+		std::ofstream out_file(output.str().c_str(),std::ios_base::out|std::ios_base::app);
+		out_file << "eventName = " << altSequence[index].event->eventName <<
+				", order = " << altSequence[index].order << "\n";
+		out_file.close();
+	}
+}
+
+
+
+void Encode::getAltSequence(vector<struct Pair> &altSequence, struct racePair &localize, int exprOrder)
+{
+		vector<struct Pair> nextSequence;
+		bool raceHappen = false;
+
+		//Then get the other execution trace.
+		//Add the additional constraints, the event order, and global variables constraints.
+		model m = z3_solver.get_model();
+		z3_solver.push();
+		vector<struct Pair>::size_type altLen = altSequence.size();
+		for (vector<struct Pair>::size_type index1 = 0; index1 < altLen - 1; index1++) {
+			if (altSequence[index1].order < exprOrder) {
+				expr eventExpr = z3_ctx.int_const(altSequence[index1].event->eventName.c_str());
+				expr orderExpr = z3_ctx.int_val(altSequence[index1].order);
+				z3_solver.add((eventExpr == orderExpr));
+				if (altSequence[index1].event->isGlobal &&
+						(altSequence[index1].event->inst->inst->getOpcode() == Instruction::Load ||
+						altSequence[index1].event->inst->inst->getOpcode() == Instruction::Store)) {
+					expr varExpr = z3_ctx.bool_val(true);
+					expr valueExpr = z3_ctx.bool_val(true);
+					stringstream ss;
+					Type::TypeID id;
+					if (altSequence[index1].event->inst->inst->getOpcode() == Instruction::Store) {
+						id = altSequence[index1].event->inst->inst->getOperand(0)->getType()->getTypeID();
+					} else { // instruction load.
+						id = altSequence[index1].event->inst->inst->getType()->getTypeID();
+					}
+					if ((id >= Type::HalfTyID) && (id <= Type::DoubleTyID)) {
+						varExpr = z3_ctx.real_const(altSequence[index1].event->globalVarFullName.c_str());
+						ss << m.eval(varExpr);
+						valueExpr = z3_ctx.real_val(ss.str().c_str());
+					} else {
+						varExpr = z3_ctx.bv_const(altSequence[index1].event->globalVarFullName.c_str(), BIT_WIDTH);
+						expr temp = to_expr(z3_ctx, Z3_mk_bv2int(z3_ctx, m.eval(varExpr), true));
+						ss << m.eval(temp);
+						valueExpr = z3_ctx.bv_val(atoi(ss.str().c_str()), BIT_WIDTH);
+					}
+					z3_solver.add((varExpr == valueExpr));
+				}
+			}
+		}
+		expr event1Expr = z3_ctx.int_const(localize.event1.event->eventName.c_str());
+		expr event2Expr = z3_ctx.int_const(localize.event2.event->eventName.c_str());
+		z3_solver.add((event1Expr > event2Expr));
+
+		check_result result = z3_solver.check();
+		if (result == z3::sat) {
+			model m = z3_solver.get_model();
+			stringstream equalss, own;
+			equalss << m.eval(event1Expr);
+			own << m.eval(event2Expr);
+			int test = atoi(own.str().c_str());
+			int equalOrder = atoi(equalss.str().c_str());
+			for (unsigned k = 0; k < trace->eventList.size(); k++) {
+					std::vector<Event *> *thread = trace->eventList[k];
+					if (thread == NULL) {
+							continue;
+					}
+					for (unsigned j = 0; j < thread->size(); j++) {
+						if (thread->at(j)->eventType == Event::IGNORE ||
+								thread->at(j)->eventType == Event::VIRTUAL)
+							continue;
+						Event * event = thread->at(j);
+						expr eventExpr = z3_ctx.int_const(event->eventName.c_str());
+						stringstream ss;
+						ss << m.eval(eventExpr);
+
+						int order = atoi(ss.str().c_str());
+						struct Pair temp;
+						temp.order = order;
+						temp.event = event;
+
+						nextSequence.push_back(temp);
+					}
+			}
+			raceHappen = true;
+			std::cerr << "one pair race detected!\n";
+			std::cerr << "dataRace " << localize.event1.event->eventName << " " << localize.event2.event->eventName << "\n";
+		}else if (result == z3::unsat) {
+			cerr << "there is no data race!\n";
+		} else {
+			cerr << "The result is unknown!\n";
+		}
+
+		z3_solver.pop();
+		if (raceHappen) {
+			vector<Event *> vecEvent1;
+			vector<Event *> vecEvent2;
+			//get two trace. bubble sort the sequence: altSequence and nextSequence
+			stringstream ss1, ss2;
+			ss1 << localize.event1.event->eventName << localize.event2.event->eventName;
+			getEventSequence(altSequence, vecEvent1, localize.event1.event, localize.event2.event);
+//			printEventSeq(vecEvent1);
+
+			Prefix* prefix = new Prefix(vecEvent1, trace->createThreadPoint,
+										ss1.str());
+			showPrefixInfo(prefix, 0);
+			runtimeData.addScheduleSet(prefix);
+
+			ss2 << localize.event2.event->eventName << localize.event1.event->eventName;
+			getEventSequence(nextSequence, vecEvent2, localize.event2.event, localize.event1.event);
+//			printEventSeq(vecEvent2);
+			Prefix *prefix1 = new Prefix(vecEvent2, trace->createThreadPoint, ss2.str());
+			showPrefixInfo(prefix1, 0);
+			runtimeData.addScheduleSet(prefix1);
+#if FORMULA_DEBUG
+			stringstream output1;
+			output1 << "./output_info/" << prefix1->getName() << ".z3expr";
+			std::ofstream out_file1(output1.str().c_str(),std::ios_base::out|std::ios_base::app);
+			out_file1 <<"\n"<<z3_solver<<"\n";
+			model m1 = z3_solver.get_model();
+			out_file1 <<"\nz3_solver.get_model()\n";
+			out_file1 <<"\n"<<m1<<"\n";
+			out_file1.close();
+#endif
+		}
+
+}
+
+
+void Encode::exchangeUnderEqual(vector<struct Pair> &altSequence, struct racePair &localize)
+{
+	int sOrder = -1;
+	int eOrder = -1;
+	//get the altSequence to execute compare the result.
+	vector<Event *> vecEvent;
+	getEventSequence(altSequence, vecEvent, localize.event1.event, localize.event2.event);
+	vector<struct Pair>::size_type len = altSequence.size();
+	for (vector<struct Pair>::size_type index = 0; index < len; index++) {
+			if (altSequence[index].event->eventName == localize.event1.event->eventName
+					|| altSequence[index].event->eventName == localize.event2.event->eventName) {
+				if (altSequence[index].event->inst->inst->getOpcode() == Instruction::Load ||
+						altSequence[index].event->inst->inst->getOpcode() == Instruction::Store) {
+					if (sOrder == -1) {
+						sOrder = index;
+						continue;
+					}
+					if (eOrder == -1)
+							eOrder = index;
+					}
+				}
+	}
+
+	vector<Event *> beforeSecondEvent;
+	vector<Event *> otherEvent;
+
+	Event * firstTemp = vecEvent[sOrder];
+	Event * secondTemp = vecEvent[eOrder];
+
+	for (int t = sOrder + 1; t < eOrder; t++) {
+		if (vecEvent[t]->eventName == vecEvent[eOrder]->eventName) {
+			beforeSecondEvent.push_back(vecEvent[t]);
+		} else {
+			otherEvent.push_back(vecEvent[t]);
+		}
+	}
+	for (unsigned k = 0, start = sOrder; k < beforeSecondEvent.size(); k++) {
+		vecEvent[start++] = beforeSecondEvent[k];
+	}
+	int firstPos = sOrder + beforeSecondEvent.size();
+	int secondPos = firstPos + 1;
+	vecEvent[firstPos] = firstTemp;
+	vecEvent[secondPos] = secondTemp;
+	for (unsigned k = 0, start = firstPos + 2; k < otherEvent.size(); k++) {
+		vecEvent[start++] = otherEvent[k];
+	}
+
+	std::cerr << "firstPos = " << firstPos << ", secondPos = " << secondPos << std::endl;
+	stringstream ss;
+	ss << vecEvent[firstPos]->eventName << vecEvent[secondPos]->eventName;
+	std::cerr << "ss1.name = " << ss.str() << std::endl;
+	printEventSeq(vecEvent);
+	Prefix* prefix = new Prefix(vecEvent, trace->createThreadPoint,
+								ss.str());
+	showPrefixInfo(prefix, 0);
+#if FORMULA_DEBUG
+	stringstream output;
+	output << "./output_info/" << prefix->getName() << ".z3expr";
+	std::ofstream out_file(output.str().c_str(),std::ios_base::out|std::ios_base::app);
+	out_file <<"\n"<<z3_solver<<"\n";
+	model m = z3_solver.get_model();
+	out_file <<"\nz3_solver.get_model()\n";
+	out_file <<"\n"<<m<<"\n";
+	out_file.close();
+#endif
+	runtimeData.addScheduleSet(prefix);
+	ss.str("");
+
+	Event *changeEvent = vecEvent[firstPos];
+	vecEvent[firstPos] = vecEvent[secondPos];
+	vecEvent[secondPos] = changeEvent;
+	ss << vecEvent[firstPos]->eventName << vecEvent[secondPos]->eventName;
+	std::cerr << "ss2.name = " << ss.str() << std::endl;
+	printEventSeq(vecEvent);
+	Prefix *prefix1 = new Prefix(vecEvent, trace->createThreadPoint, ss.str());
+	showPrefixInfo(prefix1, 0);
+#if FORMULA_DEBUG
+	stringstream output1;
+	output1 << "./output_info/" << prefix1->getName() << ".z3expr";
+	std::ofstream out_file1(output1.str().c_str(),std::ios_base::out|std::ios_base::app);
+	out_file1 <<"\n"<<z3_solver<<"\n";
+	model m1 = z3_solver.get_model();
+	out_file1 <<"\nz3_solver.get_model()\n";
+	out_file1 <<"\n"<<m1<<"\n";
+	out_file1.close();
+#endif
+	runtimeData.addScheduleSet(prefix1);
+	ss.str("");
+}
+
+
+void Encode::raceFromCandidate(vector<struct racePair> &raceCandidate)
+{
+	vector<struct racePair> trulyRace;
+	struct racePair pairTemp;
+	unsigned raceLen = raceCandidate.size();
+	std::cerr << "raceLen = " << raceLen << std::endl;
+	for (unsigned i = 0; i < raceLen; i++) {
+		//define every event's expr
+		expr preEvent1Expr = z3_ctx.bool_val(true);
+		expr event1Expr = z3_ctx.bool_val(true);
+		expr postEvent1Expr = z3_ctx.bool_val(true);
+
+		expr preEvent2Expr = z3_ctx.bool_val(true);
+		expr event2Expr = z3_ctx.bool_val(true);
+		expr postEvent2Expr = z3_ctx.bool_val(true);
+
+		expr temp1 = z3_ctx.bool_val(true);
+		expr temp2 = z3_ctx.bool_val(true);
+		expr preEvent1Temp = z3_ctx.bool_val(true);
+		expr postEvent1Temp = z3_ctx.bool_val(true);
+		expr preEvent2Temp = z3_ctx.bool_val(true);
+		expr postEvent2Temp = z3_ctx.bool_val(true);
+
+		Event *preEvent1 = raceCandidate[i].event1.preEvent;
+		Event *event1 = raceCandidate[i].event1.event;
+		Event *postEvent1 = raceCandidate[i].event1.postEvent;
+
+		Event *preEvent2 = raceCandidate[i].event2.preEvent;
+		Event *event2 = raceCandidate[i].event2.event;
+		Event *postEvent2 = raceCandidate[i].event2.postEvent;
+
+		event1Expr = z3_ctx.int_const(event1->eventName.c_str());
+		event2Expr = z3_ctx.int_const(event2->eventName.c_str());
+
+
+		if (preEvent1 != NULL) {
+					preEvent1Expr = z3_ctx.int_const(preEvent1->eventName.c_str());
+					preEvent1Temp = (preEvent1Expr < event2Expr);
+		} else {
+					preEvent1Temp = z3_ctx.bool_val(true);
+		}
+		if (postEvent1 != NULL) {
+					postEvent1Expr = z3_ctx.int_const(postEvent1->eventName.c_str());
+					postEvent1Temp = (event2Expr < postEvent1Expr);
+		} else {
+					postEvent1Temp = z3_ctx.bool_val(true);
+		}
+		if (preEvent2 != NULL) {
+					preEvent2Expr = z3_ctx.int_const(preEvent2->eventName.c_str());
+					preEvent2Temp = (preEvent2Expr < event1Expr);
+		} else {
+					preEvent2Temp = z3_ctx.bool_val(true);
+		}
+		if (postEvent2 != NULL) {
+					postEvent2Expr = z3_ctx.int_const(postEvent2->eventName.c_str());
+					postEvent2Temp = (event1Expr < postEvent2Expr);
+		} else {
+					postEvent2Temp = z3_ctx.bool_val(true);
+		}
+
+		temp1 = (preEvent1Temp && postEvent1Temp);
+		temp2 = (preEvent2Temp && postEvent2Temp);
+
+		z3_solver.push();
+		z3_solver.add( (temp1 && temp2) );
+		z3_solver.push();
+		z3_solver.add( (event1Expr <= event2Expr) );
+
+		check_result result = z3_solver.check();
+		if (result == z3::sat) {
+			vector<struct Pair> altSequence;
+			model m = z3_solver.get_model();
+			pairTemp = raceCandidate[i];
+			trulyRace.push_back(pairTemp);
+			stringstream equalss, own;
+			equalss << m.eval(event1Expr);
+			own << m.eval(event2Expr);
+			int test = atoi(own.str().c_str());
+			int equalOrder = atoi(equalss.str().c_str());
+			for (unsigned k = 0; k < trace->eventList.size(); k++) {
+				std::vector<Event *> *thread = trace->eventList[k];
+				if (thread == NULL) {
+					continue;
+				}
+				for (unsigned j = 0; j < thread->size(); j++) {
+					if (thread->at(j)->eventType == Event::IGNORE ||
+							thread->at(j)->eventType == Event::VIRTUAL)
+						continue;
+					Event * event = thread->at(j);
+					expr eventExpr = z3_ctx.int_const(event->eventName.c_str());
+					stringstream ss;
+					ss << m.eval(eventExpr);
+
+					int order = atoi(ss.str().c_str());
+					struct Pair temp;
+					temp.order = order;
+					temp.event = event;
+
+					altSequence.push_back(temp);
+				}
+			}
+
+			std::cerr << "equalOrder = " << equalOrder << " test = " << test << "\n";
+			z3_solver.pop();
+			if (equalOrder == test) {
+				exchangeUnderEqual(altSequence, raceCandidate[i]);
+			} else {
+				getAltSequence(altSequence, raceCandidate[i], atoi(equalss.str().c_str()));
+			}
+#if FORMULA_DEBUG
+			stringstream output;
+			output << "./output_info/" << raceCandidate[i].event1.event->eventName <<
+					raceCandidate[i].event2.event->eventName << ".z3expr";
+			std::ofstream out_file(output.str().c_str(),std::ios_base::out|std::ios_base::app);
+			out_file <<"\n"<<z3_solver<<"\n";
+			out_file <<"\nz3_solver.get_model()\n";
+			out_file <<"\n"<<m<<"\n";
+			out_file.close();
+#endif
+
+		} else if (result == z3::unsat) {
+			z3_solver.pop();
+			cerr << "there is no data race!\n";
+		} else {
+			z3_solver.pop();
+			cerr << "The result is unknown!\n";
+		}
+		z3_solver.pop();
+	}
+}
+
+void Encode::buildRaceTrace()
+{
+	vector<struct globalEvent> readGlobalSet;
+	vector<struct globalEvent> writeGlobalSet;
+
+	unsigned eventLen = trace->eventList.size();
+	std::cerr << "eventLen = " << eventLen << "\n";
+	for (unsigned tid = 0; tid < eventLen; tid++) {
+			std::vector<Event*> *thread = trace->eventList[tid];
+			if (thread == NULL)
+				continue;
+			for (unsigned index = 0, threadLen = thread->size(); index < threadLen; index++) {
+				Event *event = thread->at(index);
+				if (event == NULL || event->eventType == Event::VIRTUAL
+						|| event->eventType == Event::IGNORE)
+					continue;
+				if (event->isGlobal) {
+					Event *preEvent = NULL;
+					Event *postEvent = NULL;
+					struct globalEvent globalTemp;
+
+					globalTemp.event = event;
+					for (int i = index - 1; i >= 0; i--) {
+							if (thread->at(i)->eventName != event->eventName) {
+								preEvent = thread->at(i);
+								break;
+							}
+					}
+					globalTemp.preEvent = preEvent;
+					for (unsigned int j = index + 1; j < threadLen; j++) {
+						if (thread->at(j)->eventName != event->eventName) {
+								postEvent = thread->at(j);
+								break;
+							}
+					}
+					globalTemp.postEvent = postEvent;
+					if (event->inst->inst->getOpcode() == Instruction::Store) {
+						writeGlobalSet.push_back(globalTemp);
+					}
+					if (event->inst->inst->getOpcode() == Instruction::Load) {
+						readGlobalSet.push_back(globalTemp);
+					}
+				}
+		}
+	}
+	std::cerr << "read size = " << readGlobalSet.size() << " && write size = " << writeGlobalSet.size() << "\n";
+	getRaceCandidate(readGlobalSet, writeGlobalSet);
+}
+
+
+void Encode::getPossibleRaceTrace()
+{
+	std::cerr << "getPossibleRaceTrace\n";
+	buildRaceFormula();
+	addBrConstraint();
+	buildRaceTrace();
+}
+
+void Encode::addBrConstraint()
+{
+	for (unsigned i = 0; i < ifFormula.size(); i++) {
+		z3_solver.add(ifFormula[i].second);
+	}
+}
+
 
 //true :: assert can't be violated. false :: assert can be violated.
 bool Encode::verify() {
@@ -815,9 +1323,9 @@ void Encode::buildPathCondition() {
 #endif
 
 	KQuery2Z3 * kq = new KQuery2Z3(z3_ctx);
-	unsigned int totalExpr = trace->kQueryExpr.size();
+	unsigned int totalExpr = trace->storeSymbolicExpr.size();
 	for (unsigned int i = 0; i < totalExpr; i++) {
-		z3::expr temp = kq->getZ3Expr(trace->kQueryExpr[i]);
+		z3::expr temp = kq->getZ3Expr(trace->storeSymbolicExpr[i]);
 		z3_solver.add(temp);
 #if FORMULA_DEBUG
 	cerr << temp << "\n";
@@ -987,7 +1495,7 @@ void Encode::buildMemoryModelFormula() {
 	//statics
 	formulaNum++;
 //level: 0 bitcode; 1 source code; 2 block
-	controlGranularity(2);
+	controlGranularity(0);
 //
 //initial and final
 	for (unsigned tid = 0; tid < trace->eventList.size(); tid++) {

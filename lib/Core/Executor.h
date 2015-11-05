@@ -569,6 +569,11 @@ public:
                                      int argc,
                                      char **argv,
                                      char **envp);
+  //add by PeiLIU
+  void runRaceDetect(llvm::Function *f,
+  		  	  	  	  	  	  	   int argc,
+  								   char **argv,
+  								   char **envp);
 
   void prepareSymbolicExecution();
   void prepareNextExecution();

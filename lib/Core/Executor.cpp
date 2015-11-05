@@ -4681,6 +4681,23 @@ void Executor::createSpecialElement(ExecutionState& state, Type* type,
 //	  }
 //	  assert(isAllThreadFinished);
 //}
+
+
+void Executor::runRaceDetect(llvm::Function *f, int argc, char **argv,
+		char **envp) {
+	while (!isFinished && execStatus != RUNTIMEERROR) {
+		execStatus = SUCCESS;
+		runFunctionAsMain(f,argc, argv, envp);
+		if (isSymbolicRun && executionNum == 0) {
+			std::cerr << "executed once\n";
+			prepareSymbolicExecution();
+			runFunctionAsMain(f, argc, argv, envp);
+		}
+		prepareNextExecution();
+	}
+}
+
+
 void Executor::runVerification(llvm::Function *f, int argc, char **argv,
 		char **envp) {
 	//first run

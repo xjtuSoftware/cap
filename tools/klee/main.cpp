@@ -1408,7 +1408,9 @@ int main(int argc, char **argv, char **envp) {
 			}
 		}
 		//interpreter->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
-		interpreter->runVerification(mainFn, pArgc, pArgv, pEnvp);
+		//interpreter->runVerification(mainFn, pArgc, pArgv, pEnvp);
+		//run for harmful data race detection.
+		interpreter->runRaceDetect(mainFn, pArgc, pArgv, pEnvp);
 		while (!seeds.empty()) {
 			kTest_free(seeds.back());
 			seeds.pop_back();

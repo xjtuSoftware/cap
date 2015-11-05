@@ -315,28 +315,6 @@ z3::expr KQuery2Z3::eachExprToZ3(ref<Expr> &ele) {
 				left.kind() == left.kind()
 						&& "sort between left and right are different in Expr::Add\n");
 
-//			if (left.is_real()) {
-//				std::cerr << "left is real sort\n";
-//			}
-//			if (right.is_real()) {
-//				std::cerr << "right is real sort\n";
-//			}
-//			std::cerr << left << std::endl;
-//			ae->left.get()->dump();
-//			if (left.is_bv()) {
-//				std::cerr << "left is bv\n";
-//			} else {
-//				if (left.is_arith())
-//					std::cerr << "left is arith\n";
-//			}
-//			std::cerr << right << std::endl;
-//			ae->right.get()->dump();
-//			if (right.is_bv()) {
-//					std::cerr << "right is bv\n";
-//			} else {
-//					if (right.is_arith())
-//						std::cerr << "right is arith\n";
-//			}
 			res = left + right;
 			return res;
 		}

@@ -157,6 +157,11 @@ public:
                                    int argc,
                                    char **argv,
                                    char **envp) = 0;
+  //add by PeiLIU
+  virtual void runRaceDetect(llvm::Function *f,
+		  	  	  	  	  	  	   int argc,
+								   char **argv,
+								   char **envp) = 0;
 };
 
 } // End klee namespace
