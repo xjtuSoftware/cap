@@ -67,7 +67,7 @@ public:
 
 	void printEventSeq(vector<Event *> &eventSequence);
 	void buildRaceFormula();
-	void addBrConstraint();
+	void addBrConstraint(Event *);
 	void buildRaceTrace();
 	void getRaceCandidate(vector<struct globalEvent> &readGlobalSet,
 			vector<struct globalEvent> &writeGlobalSet);
