@@ -81,6 +81,12 @@ struct Pair {
 	Event *event;
 };
 
+
+struct OrderPair {
+	int lower;
+	int upper;
+};
+
 void Encode::buildAllFormula() {
 	buildInitValueFormula();
 	buildPathCondition();
@@ -189,7 +195,7 @@ void Encode::getEventSequence(vector<struct Pair> &altSequence, vector<Event *> 
 
 
 
-void Encode::getAltSequence(vector<struct Pair> &altSequence, struct racePair &localize, int exprOrder)
+void Encode::getAltSequence(vector<struct Pair> &altSequence, struct racePair &localize, struct OrderPair &op)
 {
 	vector<struct Pair> nextSequence;
 	bool raceHappen = false;
@@ -199,11 +205,12 @@ void Encode::getAltSequence(vector<struct Pair> &altSequence, struct racePair &l
 	model m = z3_solver.get_model();
 	z3_solver.push();
 	vector<struct Pair>::size_type altLen = altSequence.size();
-	for (vector<struct Pair>::size_type index1 = 0; index1 < altLen - 1; index1++) {
-		if (altSequence[index1].order < exprOrder) {
-			expr eventExpr = z3_ctx.int_const(altSequence[index1].event->eventName.c_str());
-			expr orderExpr = z3_ctx.int_val(altSequence[index1].order);
-			z3_solver.add((eventExpr == orderExpr));
+
+	for (vector<struct Pair>::size_type index1 = 0; index1 < altLen; index1++) {
+		if (altSequence[index1].order < op.lower) {
+//			expr eventExpr = z3_ctx.int_const(altSequence[index1].event->eventName.c_str());
+//			expr orderExpr = z3_ctx.int_val(altSequence[index1].order);
+//			z3_solver.add((eventExpr == orderExpr));
 			if (altSequence[index1].event->isGlobal &&
 					(altSequence[index1].event->inst->inst->getOpcode() == Instruction::Load ||
 					altSequence[index1].event->inst->inst->getOpcode() == Instruction::Store)) {
@@ -230,6 +237,18 @@ void Encode::getAltSequence(vector<struct Pair> &altSequence, struct racePair &l
 			}
 		}
 	}
+
+	for (vector<struct Pair>::size_type index1 = 0; index1 < altLen; index1++) {
+		if (altSequence[index1].order > op.upper) {
+//			std::cerr << "event Name = " << altSequence[index1].event->eventName <<
+//							", event Order = " << altSequence[index1].order << std::endl;
+			expr eventExpr = z3_ctx.int_const(altSequence[index1].event->eventName.c_str());
+			expr orderExpr = z3_ctx.int_val(altSequence[index1].order);
+			z3_solver.add((eventExpr == orderExpr));
+		}
+
+	}
+
 	expr event1Expr = z3_ctx.int_const(localize.event1.event->eventName.c_str());
 	expr event2Expr = z3_ctx.int_const(localize.event2.event->eventName.c_str());
 	z3_solver.add((event1Expr > event2Expr));
@@ -479,6 +498,9 @@ void Encode::raceFromCandidate(vector<struct racePair> &raceCandidate)
 			stringstream equalss, own;
 			equalss << m.eval(event1Expr);
 			own << m.eval(event2Expr);
+			struct OrderPair op;
+			op.lower =  atoi(equalss.str().c_str());
+			op.upper = atoi(own.str().c_str());
 			int test = atoi(own.str().c_str());
 			int equalOrder = atoi(equalss.str().c_str());
 			for (unsigned k = 0; k < trace->eventList.size(); k++) {
@@ -509,7 +531,7 @@ void Encode::raceFromCandidate(vector<struct racePair> &raceCandidate)
 			if (equalOrder == test) {
 				exchangeUnderEqual(altSequence, raceCandidate[i]);
 			} else {
-				getAltSequence(altSequence, raceCandidate[i], atoi(equalss.str().c_str()));
+				getAltSequence(altSequence, raceCandidate[i], op);
 			}
 #if FORMULA_DEBUG
 			stringstream output;

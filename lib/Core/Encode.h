@@ -72,7 +72,7 @@ public:
 	void getRaceCandidate(vector<struct globalEvent> &readGlobalSet,
 			vector<struct globalEvent> &writeGlobalSet);
 	void raceFromCandidate(vector<struct racePair> &raceCandidate);
-	void getAltSequence(vector<struct Pair> &, struct racePair &, int);
+	void getAltSequence(vector<struct Pair> &, struct racePair &, struct OrderPair &);
 	void getPossibleRaceTrace();
 	void getEventSequence(vector<struct Pair> &, vector<Event *> &, Event *, Event *);
 	void exchangeUnderEqual(vector<struct Pair> &, struct racePair &);
