@@ -68,6 +68,14 @@ void DealWithSymbolicExpr::resolveSymbolicExpr(ref<klee::Expr> value) {
 }
 
 void DealWithSymbolicExpr::filterUseless(Trace* trace) {
+
+	//get the copy readSet and writeSet
+	trace->copyReadSet.insert(trace->readSet.begin(), trace->readSet.end());
+	trace->copyWriteSet.insert(trace->writeSet.begin(), trace->writeSet.end());
+	trace->copy_global_variable_initializer.insert(trace->global_variable_initializer.begin(),
+			trace->global_variable_initializer.end());
+
+
 	std::vector<std::string> remainingExprVarName;
 	std::vector<ref<klee::Expr> > remainingExpr;
 

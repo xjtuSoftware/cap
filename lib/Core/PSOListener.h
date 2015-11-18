@@ -93,6 +93,7 @@ public:
 	virtual void testForKquery2Z3();
 	virtual void getGlobalSymbolic();
 
+
 private:
 	Executor* executor;
 	DealWithSymbolicExpr filter;

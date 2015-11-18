@@ -45,6 +45,7 @@ using namespace llvm;
 #define COND_DEBUG 0
 bool isPrefixFinished = false;
 
+
 namespace klee {
 
 Event* lastEvent;
@@ -54,6 +55,9 @@ std::map<std::string, ref<Expr> > symbolicMap;
 std::map<ref<Expr>, ref<Expr> > addressSymbolicMap;
 std::map<string, std::vector<unsigned> > assertMap;
 bool kleeBr;
+
+static int resFlag = 0;
+static std::vector<string> vecOutRes;
 
 PSOListener::PSOListener(Executor* executor) :
 		BitcodeListener(), executor(executor), temporalVariableID(0) {
@@ -588,9 +592,9 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 					} else {
 						item->isLocal = true;
 					}
-					//					if (mo->isGlobal) {
-					//						insertGlobalVariable(address, inst->getOperand(0)->getType()->getPointerElementType());
-					//					}
+//					if (mo->isGlobal) {
+//						insertGlobalVariable(address, inst->getOperand(0)->getType()->getPointerElementType());
+//					}
 					string varName = createVarName(mo->id, address,
 							item->isGlobal);
 					string varFullName;
@@ -620,14 +624,14 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 							item->vectorInfo = gi->second;
 						}
 					}
-					//					if (item->vectorInfo) {
-					//						vector<uint64_t> v = item->vectorInfo->getAllPossibleAddress();
-					//						for(vector<uint64_t>::iterator vi = v.begin(), ve = v.end(); vi != ve; vi++) {
-					//							cerr << *vi << " ";
-					//						}
-					//						cerr << endl;
-					//					}
-					//					cerr << "address = " << realAddress->getZExtValue() << endl;
+//					if (item->vectorInfo) {
+//						vector<uint64_t> v = item->vectorInfo->getAllPossibleAddress();
+//						for(vector<uint64_t>::iterator vi = v.begin(), ve = v.end(); vi != ve; vi++) {
+//							cerr << *vi << " ";
+//						}
+//						cerr << endl;
+//					}
+					cerr << "address = " << realAddress->getZExtValue() << endl;
 				} else {
 					cerr << "Load address = " << realAddress->getZExtValue()
 							<< endl;
@@ -908,7 +912,7 @@ void PSOListener::beforeRunMethodAsMain(ExecutionState &initialState) {
 	if (traceNum == 0) {
 		cerr << " 初始执行" << endl;
 	} else {
-		cerr << " 前缀执行,前缀文件为prefix" << executor->prefix->getName() << ".txt"
+		cerr << " 前缀执行,前缀文件为prefix" << initialState.prefix->getName() << ".txt"
 				<< endl;
 	}
 	cerr
@@ -1292,6 +1296,41 @@ void PSOListener::handleExternalFunction(ExecutionState& state,
 	Trace* trace = rdManager.getCurrentTrace();
 	Instruction* inst = ki->inst;
 	Function *f = lastEvent->calledFunction;
+
+
+	if (state.prefix) {
+	CallSite cs(inst);
+	unsigned numArgs = cs.arg_size();
+
+	if (f->getName() == "printf") {
+		for (unsigned i = 2; i <= numArgs; i++) {
+			ref<Expr> temp = executor->eval(ki, i, state.currentThread).value;
+			ConstantExpr * ce = dyn_cast<ConstantExpr>(temp.get());
+			std::string tmpStr;
+			ce->toString(tmpStr);
+			if (resFlag == 0) {
+				vecOutRes.push_back(tmpStr);
+			} else {
+				for (int i = 0; i < vecOutRes.size(); i++) {
+					std::cerr << vecOutRes[i] << std::endl;
+				}
+				if (vecOutRes[i - 2] != tmpStr) {
+					std::cerr << "output changed\n";
+					break;
+				}
+
+			}
+
+		}
+		if (vecOutRes.size() != 0 && resFlag != 0)
+			vecOutRes.clear();
+		if (resFlag == 0)
+			resFlag++;
+		else
+			resFlag = 0;
+	}
+	}
+
 	if (f->getName() == "strcpy") {
 
 //		ref<Expr> scrAddress = executor->eval(ki, 2, state.currentThread).value;
@@ -1714,10 +1753,14 @@ void PSOListener::prepareSymbolicRun(ExecutionState &initialState) {
 void PSOListener::getNewPrefix() {
 	//获取新的前缀
 	Prefix* prefix = rdManager.getNextPrefix();
+	Prefix * prefix1 = rdManager.getNextPrefix();
 	//Prefix* prefix = NULL;
 	if (prefix) {
 		delete executor->prefix;
+		delete executor->prefix1;
 		executor->prefix = prefix;
+		executor->prefix1 = prefix1;
+		std::cerr << "execute two prefix " << prefix->getName() << prefix1->getName() << std::endl;
 		executor->isFinished = false;
 	} else {
 		executor->isFinished = true;
@@ -1883,6 +1926,8 @@ void PSOListener::beforeSymbolicRun(ExecutionState &state, KInstruction *ki) {
 		case Instruction::Call: {
 			CallSite cs(inst);
 			ref<Expr> function = executor->eval(ki, 0, thread).value;
+
+
 			if (function->getKind() == Expr::Concat) {
 				ref<Expr> value = symbolicMap[filter.getFullName(function)];
 				if (value->getKind() != Expr::Constant) {
@@ -2212,7 +2257,7 @@ void PSOListener::afterprepareSymbolicRun(ExecutionState &initialState) {
 		it->get()->dump();
 	}
 #endif
-//	filter.filterUseless(trace);
+	filter.filterUseless(trace);
 #if DEBUGSYMBOLIC
 	std::cerr << "kQueryExpr = " << trace->kQueryExpr.size()
 	<< std::endl;

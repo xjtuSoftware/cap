@@ -94,6 +94,48 @@ void DFSSearcher::update(ExecutionState *current,
 
 ///
 
+
+/// RRSearcher implements twin schedule.
+ExecutionState &RRSearcher::selectState() {
+  if (states.size() == 1)
+	  return *states.front();
+  else {
+	  if (RRCount >= 2) {
+		  RRCount = 0;
+	  }
+	  return *states[RRCount++];
+  }
+}
+
+void RRSearcher::update(ExecutionState *current,
+                         const std::set<ExecutionState*> &addedStates,
+                         const std::set<ExecutionState*> &removedStates) {
+  states.insert(states.end(),
+                addedStates.begin(),
+                addedStates.end());
+  for (std::set<ExecutionState*>::const_iterator it = removedStates.begin(),
+         ie = removedStates.end(); it != ie; ++it) {
+    ExecutionState *es = *it;
+    if (es == states.back()) {
+    	states.pop_back();
+    } else {
+      bool ok = false;
+
+      for (std::vector<ExecutionState*>::iterator it = states.begin(),
+             ie = states.end(); it != ie; ++it) {
+        if (es==*it) {
+        	states.erase(it);
+          ok = true;
+          break;
+        }
+      }
+
+      assert(ok && "invalid state removed");
+    }
+  }
+}
+
+
 ExecutionState &BFSSearcher::selectState() {
   return *states.front();
 }

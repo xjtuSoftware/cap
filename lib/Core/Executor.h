@@ -207,6 +207,8 @@ private:
   void printFileLine(ExecutionState &state, KInstruction *ki);
 
   void run(ExecutionState &initialState);
+  //change to this
+  void run(ExecutionState &initialState, ExecutionState &twinState);
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
@@ -217,6 +219,7 @@ private:
 			      const llvm::Constant *c,
 			      unsigned offset);
   void initializeGlobals(ExecutionState &state);
+  void initializeGlobals(ExecutionState &state, ExecutionState &twinState);
 
   void stepInstruction(ExecutionState &state);
   void updateStates(ExecutionState *current);
@@ -456,19 +459,24 @@ private:
 
   //std::vector<PTree*> ptreeVector;
 
-  MutexManager mutexManager;
-
-  CondManager condManager;
-
-  BarrierManager barrierManager;
-
-  //std::set<ExecutionState*> allThread; // all threads
-
-  std::map<unsigned, std::vector<unsigned> > joinRecord; // store the relation of join, key->threadId, value->a list of threads that are waiting key's termination
+  //remove these multi-threaded related manager to state
+  //let every state control every execution.
+//
+//  MutexManager mutexManager;
+//
+//  CondManager condManager;
+//
+//  BarrierManager barrierManager;
+//
+//  //std::set<ExecutionState*> allThread; // all threads
+//
+//  std::map<unsigned, std::vector<unsigned> > joinRecord; // store the relation of join, key->threadId, value->a list of threads that are waiting key's termination
 
   bool isFinished; // whether the verification is finished
 
   Prefix* prefix; // prefix used to guide execution
+  //added by Pei LIU
+  Prefix * prefix1;
 
   bool isSymbolicRun;
 

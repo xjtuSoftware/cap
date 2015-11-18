@@ -23,6 +23,7 @@ namespace {
   cl::list<Searcher::CoreSearchType>
   CoreSearch("search", cl::desc("Specify the search heuristic (default=random-path interleaved with nurs:covnew)"),
 	     cl::values(
+	        clEnumValN(Searcher::RR, "rr", "use Round Rin Search (RR)"),
 	    	clEnumValN(Searcher::DFS, "dfs", "use Depth First Search (DFS)"),
 			clEnumValN(Searcher::BFS, "bfs", "use Breadth First Search (BFS)"),
 			clEnumValN(Searcher::Round, "round", "use Round Search"),
@@ -79,6 +80,7 @@ bool klee::userSearcherRequiresMD2U() {
 Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   Searcher *searcher = NULL;
   switch (type) {
+  case Searcher::RR: searcher = new RRSearcher(); break;
   case Searcher::DFS: searcher = new DFSSearcher(); break;
   case Searcher::BFS: searcher = new BFSSearcher(); break;
   case Searcher::RandomState: searcher = new RandomSearcher(); break;
@@ -99,7 +101,7 @@ Searcher *klee::constructUserSearcher(Executor &executor) {
 
   // default values
 	if (CoreSearch.size() == 0) {
-		CoreSearch.push_back(Searcher::DFS);
+		CoreSearch.push_back(Searcher::RR);
 //		CoreSearch.push_back(Searcher::RandomPath);
 //		CoreSearch.push_back(Searcher::NURS_CovNew);
 	}

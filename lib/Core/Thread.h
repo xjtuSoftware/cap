@@ -71,6 +71,7 @@ public:
   ThreadState threadState;
   AddressSpace* addressSpace;
   static unsigned nextThreadId;
+  static int executeFlag;
 public:
 	Thread();
 	Thread(unsigned threadId, Thread* parentThread, AddressSpace* addressSpace, KFunction* kf);
@@ -110,6 +111,20 @@ public:
 
 	static unsigned getNextThreadId() {
 		unsigned threadId = nextThreadId++;
+		return threadId;
+	}
+
+	static unsigned getAltNextThreadId(int flag) {
+		if (executeFlag == -1)
+			executeFlag = flag;
+		unsigned threadId = 0;
+		if (executeFlag % 2 == 0) {
+			threadId = nextThreadId;
+			executeFlag++;
+		} else {
+			threadId = nextThreadId++;
+			executeFlag = -1;
+		}
 		return threadId;
 	}
 };

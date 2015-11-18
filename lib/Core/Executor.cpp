@@ -246,14 +246,13 @@ Executor::Executor(const InterpreterOptions &opts, InterpreterHandler *ih) :
 						std::min(MaxCoreSolverTime, MaxInstructionTime) :
 						std::max(MaxCoreSolverTime, MaxInstructionTime)),
 		//ptreeVector(20),
-		mutexManager(), condManager(), isFinished(false), prefix(NULL), isSymbolicRun(
+		isFinished(false), prefix(NULL), prefix1(NULL), isSymbolicRun(
 				false),
 		//isExecutionSuccess(true),
 		executionNum(0), execStatus(SUCCESS) {
 	if (coreSolverTimeout)
 		UseForkedCoreSolver = true;
-	condManager.setMutexManager(&mutexManager);
-	condManager.setExecutor(this);
+//	condManager.setExecutor(this);
 	//cerr << &mutexManager << " " << condManager.mutexManager << endl;
 	Solver *coreSolver = NULL;
 
@@ -446,7 +445,7 @@ MemoryObject * Executor::addExternalObject(ExecutionState &state, void *addr,
 
 extern void *__dso_handle __attribute__ ((__weak__));
 
-void Executor::initializeGlobals(ExecutionState &state) {
+void Executor::initializeGlobals(ExecutionState &state, ExecutionState &twinState) {
 	Module *m = kmodule->module;
 
 	if (m->getModuleInlineAsm() != "")
@@ -484,6 +483,10 @@ void Executor::initializeGlobals(ExecutionState &state) {
 	/* From /usr/include/errno.h: it [errno] is a per-thread variable. */
 	int *errno_addr = __errno_location();
 	addExternalObject(state, (void *) errno_addr, sizeof *errno_addr, false);
+//	if (prefix) {
+//		int *twin_errno_addr = __errno_location();
+//		addExternalObject(twinState, (void *) twin_errno_addr, sizeof *twin_errno_addr, false);
+//	}
 
 	/* from /usr/include/ctype.h:
 	 These point into arrays of 384, so they can be indexed by any `unsigned
@@ -493,16 +496,34 @@ void Executor::initializeGlobals(ExecutionState &state) {
 	addExternalObject(state, const_cast<uint16_t*>(*addr - 128),
 			384 * sizeof **addr, true);
 	addExternalObject(state, addr, sizeof(*addr), true);
+//	if (prefix) {
+//		const uint16_t **twin_addr = __ctype_b_loc();
+//		addExternalObject(twinState, const_cast<uint16_t*>(*twin_addr - 128),
+//					384 * sizeof **twin_addr, true);
+//		addExternalObject(twinState, twin_addr, sizeof(*twin_addr), true);
+//	}
 
 	const int32_t **lower_addr = __ctype_tolower_loc();
 	addExternalObject(state, const_cast<int32_t*>(*lower_addr - 128),
 			384 * sizeof **lower_addr, true);
 	addExternalObject(state, lower_addr, sizeof(*lower_addr), true);
+//	if (prefix) {
+//		const int32_t **twin_lower_addr = __ctype_tolower_loc();
+//		addExternalObject(state, const_cast<int32_t*>(*twin_lower_addr - 128),
+//					384 * sizeof **twin_lower_addr, true);
+//		addExternalObject(state, twin_lower_addr, sizeof(*twin_lower_addr), true);
+//	}
 
 	const int32_t **upper_addr = __ctype_toupper_loc();
 	addExternalObject(state, const_cast<int32_t*>(*upper_addr - 128),
 			384 * sizeof **upper_addr, true);
 	addExternalObject(state, upper_addr, sizeof(*upper_addr), true);
+//	if (prefix) {
+//		const int32_t **twin_upper_addr = __ctype_toupper_loc();
+//		addExternalObject(state, const_cast<int32_t*>(*twin_upper_addr - 128),
+//					384 * sizeof **twin_upper_addr, true);
+//		addExternalObject(state, twin_upper_addr, sizeof(*twin_upper_addr), true);
+//	}
 #endif
 #endif
 #endif
@@ -543,6 +564,10 @@ void Executor::initializeGlobals(ExecutionState &state) {
 
 			MemoryObject *mo = memory->allocate(size, false, true, i);
 			ObjectState *os = bindObjectInState(state, mo, false);
+			ObjectState *twin_os = NULL;
+			if (prefix) {
+				twin_os = bindObjectInState(twinState, mo, false);
+			}
 			globalObjects.insert(std::make_pair(i, mo));
 			globalAddresses.insert(std::make_pair(i, mo->getBaseExpr()));
 
@@ -562,6 +587,11 @@ void Executor::initializeGlobals(ExecutionState &state) {
 
 				for (unsigned offset = 0; offset < mo->size; offset++)
 					os->write8(offset, ((unsigned char*) addr)[offset]);
+
+				if (prefix) {
+					for (unsigned offset = 0; offset < mo->size; offset++)
+						twin_os->write8(offset, ((unsigned char*) addr)[offset]);
+				}
 			}
 		} else {
 			LLVM_TYPE_Q Type *ty = i->getType()->getElementType();
@@ -588,18 +618,29 @@ void Executor::initializeGlobals(ExecutionState &state) {
 							(unsigned long long) size);
 					mo = memory->allocateFixed(address, size, &*i);
 					mo->isUserSpecified = true; // XXX hack;
+//					if (prefix) {
+//						twin_mo = memory->allocateFixed(address, size, &*i);
+//						twin_mo->isUserSpecified = true; // XXX hack;
+//					}
 				}
 			}
 
 			if (!mo)
 				mo = memory->allocate(size, false, true, &*i);
+
 			assert(mo && "out of memory");
 			ObjectState *os = bindObjectInState(state, mo, false);
+			ObjectState *twin_os = NULL;
+			if (prefix)
+				twin_os = bindObjectInState(twinState, mo, false);
 			globalObjects.insert(std::make_pair(i, mo));
 			globalAddresses.insert(std::make_pair(i, mo->getBaseExpr()));
 
-			if (!i->hasInitializer())
+			if (!i->hasInitializer()) {
 				os->initializeToRandom();
+				if (prefix)
+					twin_os->initializeToRandom();
+			}
 		}
 	}
 
@@ -617,12 +658,19 @@ void Executor::initializeGlobals(ExecutionState &state) {
 			m->global_end(); i != e; ++i) {
 		if (i->hasInitializer()) {
 			MemoryObject *mo = globalObjects.find(i)->second;
-			const ObjectState *os = state.addressSpace.findObject(mo);
+ 			const ObjectState *os = state.addressSpace.findObject(mo);
 			assert(os);
 			ObjectState *wos = state.addressSpace.getWriteable(mo, os);
 
 			initializeGlobalObject(state, wos, i->getInitializer(), 0);
 			// if(i->isConstant()) os->setReadOnly(true);
+			if (prefix) {
+				const ObjectState *twin_os = twinState.addressSpace.findObject(mo);
+				assert(twin_os);
+				ObjectState *twin_wos = twinState.addressSpace.getWriteable(mo, twin_os);
+
+				initializeGlobalObject(twinState, twin_wos, i->getInitializer(), 0);
+			}
 		}
 	}
 }
@@ -1472,9 +1520,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 		if (thread->stack.size() <= 1) {
 			assert(!caller && "caller set on initial stack frame");
 			//recover join thread
-			map<unsigned, vector<unsigned> >::iterator ji = joinRecord.find(
+			map<unsigned, vector<unsigned> >::iterator ji = state.joinRecord.find(
 					thread->threadId);
-			if (ji != joinRecord.end()) {
+			if (ji != state.joinRecord.end()) {
 				for (vector<unsigned>::iterator bi = ji->second.begin(), be =
 						ji->second.end(); bi != be; bi++) {
 					state.swapInThread(*bi, true, false);
@@ -1689,6 +1737,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 		unsigned numArgs = cs.arg_size();
 		Value *fp = cs.getCalledValue();
 		Function *f = getTargetFunction(fp, state);
+
 
 		// Skip debug intrinsics, we can't evaluate their metadata arguments.
 		if (f && isDebugIntrinsic(f, kmodule))
@@ -2060,7 +2109,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 //		std::cerr<<"base : "<<base<<std::endl;
 //    base->dump();
 		ref<Expr> value = eval(ki, 0, thread).value;
-//		std::cerr<<"value : "<<value<<std::endl;
 		executeMemoryOperation(state, true, base, value, 0);
 		//handle mutex and condition created by malloc
 		Type* valueTy = ki->inst->getOperand(0)->getType();
@@ -2874,7 +2922,7 @@ void Executor::bindModuleConstants() {
 	}
 }
 
-void Executor::run(ExecutionState &initialState) {
+void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 
 	bindModuleConstants();
 
@@ -2883,6 +2931,9 @@ void Executor::run(ExecutionState &initialState) {
 	initTimers();
 
 	states.insert(&initialState);
+	if (prefix)
+		states.insert(&twinState);
+
 
 //  if (usingSeeds) {
 //    std::vector<SeedInfo> &v = seedMap[&initialState];
@@ -2955,7 +3006,7 @@ void Executor::run(ExecutionState &initialState) {
 
 	searcher->update(0, states, std::set<ExecutionState*>());
 
-	if (!isSymbolicRun) {
+	if (!isSymbolicRun && executionNum == 0) {
 		for (std::vector<BitcodeListener*>::iterator bit =
 				bitcodeListeners.begin(), bie = bitcodeListeners.end();
 				bit != bie; ++bit) {
@@ -2973,6 +3024,8 @@ void Executor::run(ExecutionState &initialState) {
 
 	//insert global mutex ,condition and barrier
 	handleInitializers(initialState);
+	if (prefix)
+		handleInitializers(twinState);
 
 	if (!isSymbolicRun) {
 		for (std::vector<BitcodeListener*>::iterator bit =
@@ -2981,6 +3034,8 @@ void Executor::run(ExecutionState &initialState) {
 			(*bit)->afterPreparation();
 		}
 	}
+
+
 
 	while (!states.empty() && !haltExecution) {
 		ExecutionState &state = searcher->selectState();
@@ -2998,10 +3053,10 @@ void Executor::run(ExecutionState &initialState) {
 				string errorMsg;
 				bool isBlocked;
 				bool deadlock = false;
-				if (mutexManager.tryToLockForBlockedThread(thread->threadId,
+				if (state.mutexManager.tryToLockForBlockedThread(thread->threadId,
 						isBlocked, errorMsg)) {
 					if (isBlocked) {
-						if (prefix && !prefix->isFinished()) {
+						if (state.prefix && !state.prefix->isFinished()) {
 							cerr << "thread" << thread->threadId << ": "
 									<< thread->pc->info->file << "/"
 									<< thread->pc->info->line << " "
@@ -3073,14 +3128,21 @@ void Executor::run(ExecutionState &initialState) {
 //    	}
 //    }
 		KInstruction *ki = thread->pc;
-		if (prefix && !prefix->isFinished() && ki != prefix->getCurrentInst()) {
+		ki->inst->dump();
+		if (state.prefix && !state.prefix->isFinished() && ki != state.prefix->getCurrentInst()) {
 			//cerr << "prefix: " << prefix->getCurrentInst() << " " << prefix->getCurrentInst()->inst->getOpcodeName() << " reality: " << ki << " " << ki->inst->getOpcodeName() << endl;
 			cerr << "thread id : " << thread->threadId << "\n";
 			ki->inst->print(errs());
 			cerr << endl;
-			prefix->getCurrentInst()->inst->print(errs());
+			state.prefix->getCurrentInst()->inst->print(errs());
 			cerr << endl;
 			cerr << "prefix unmatched\n";
+//			searcher->removeState(&state);
+//			std::set<ExecutionState*> es;
+//			es.insert(&state);
+//			searcher->update(0, std::set<ExecutionState*>(), es);
+//			std::cerr << "states size = " << states.size() << std::endl;
+//			continue;
 			execStatus = IGNOREDERROR;
 			terminateState(state);
 			break;
@@ -3093,9 +3155,9 @@ void Executor::run(ExecutionState &initialState) {
 					bitcodeListeners.begin(), bie = bitcodeListeners.end();
 					bit != bie; ++bit) {
 				(*bit)->executeInstruction(state, ki);
-
 			}
 		}
+//		std::cerr << "after psolistener\n";
 
 		if (isSymbolicRun) {
 			for (std::vector<BitcodeListener*>::iterator bit =
@@ -3104,6 +3166,7 @@ void Executor::run(ExecutionState &initialState) {
 				(*bit)->beforeSymbolicRun(state, ki);
 			}
 		}
+
 
 		executeInstruction(state, ki);
 
@@ -3122,9 +3185,10 @@ void Executor::run(ExecutionState &initialState) {
 				(*bit)->instructionExecuted(state, ki);
 			}
 		}
-		if (prefix) {
-			prefix->increase();
+		if (state.prefix) {
+			state.prefix->increase();
 		}
+
 		if (execStatus != SUCCESS) {
 			updateStates(&state);
 			break;
@@ -3172,6 +3236,7 @@ void Executor::run(ExecutionState &initialState) {
 				}
 			}
 		}
+
 		if (state.threadScheduler->isSchedulerEmpty()) {
 			if(!state.examineAllThreadFinalState()){
 				execStatus = RUNTIMEERROR;
@@ -3182,7 +3247,6 @@ void Executor::run(ExecutionState &initialState) {
 		}
 		updateStates(&state);
 	}
-
 	delete searcher;
 	searcher = 0;
 
@@ -3211,7 +3275,6 @@ void Executor::run(ExecutionState &initialState) {
 	}
 
 	dump: if (DumpStatesOnHalt && !states.empty()) {
-		std::cerr << "KLEE: halting execution, dumping remaining states\n";
 		for (std::set<ExecutionState*>::iterator it = states.begin(), ie =
 				states.end(); it != ie; ++it) {
 			ExecutionState &state = **it;
@@ -3952,12 +4015,14 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
 void Executor::runFunctionAsMain(Function *f, int argc, char **argv,
 		char **envp) {
 	std::vector<ref<Expr> > arguments;
+	std::vector<ref<Expr> > twinArgs;
 
 	// force deterministic initialization of memory objects
 	srand(1);
 	srandom(1);
 
 	MemoryObject *argvMO = 0;
+	MemoryObject *twinMO = 0;
 
 	// In order to make uclibc happy and be closer to what the system is
 	// doing we lay out the environments at the end of the argv array
@@ -3974,17 +4039,29 @@ void Executor::runFunctionAsMain(Function *f, int argc, char **argv,
 	Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
 	if (ai != ae) {
 		arguments.push_back(ConstantExpr::alloc(argc, Expr::Int32));
+		if (prefix)
+			twinArgs.push_back(ConstantExpr::alloc(argc, Expr::Int32));
 
 		if (++ai != ae) {
 			argvMO = memory->allocate((argc + 1 + envc + 1 + 1) * NumPtrBytes,
 					false, true, f->begin()->begin());
+			if (prefix)
+				twinMO = memory->allocate((argc + 1 + envc + 1 + 1) * NumPtrBytes,
+						false, true, f->begin()->begin());
 
 			arguments.push_back(argvMO->getBaseExpr());
+			if (prefix)
+				twinArgs.push_back(twinMO->getBaseExpr());
 
 			if (++ai != ae) {
 				uint64_t envp_start = argvMO->address
 						+ (argc + 1) * NumPtrBytes;
 				arguments.push_back(Expr::createPointer(envp_start));
+				if (prefix) {
+					uint64_t envp_start = twinMO->address
+											+ (argc + 1) * NumPtrBytes;
+					twinArgs.push_back(Expr::createPointer(envp_start));
+				}
 
 				if (++ai != ae)
 					klee_error("invalid main function (expect 0-3 arguments)");
@@ -3992,11 +4069,17 @@ void Executor::runFunctionAsMain(Function *f, int argc, char **argv,
 		}
 	}
 	ExecutionState *state;
+	ExecutionState *twinState = NULL;
 	if (prefix) {
 		state = new ExecutionState(kmodule->functionMap[f], prefix);
+		state->condManager.setExecutor(this);
+		twinState = new ExecutionState(kmodule->functionMap[f], prefix1);
+		state->condManager.setExecutor(this);
 	} else {
 		state = new ExecutionState(kmodule->functionMap[f]);
+		state->condManager.setExecutor(this);
 	}
+
 	if (pathWriter)
 		state->pathOS = pathWriter->open();
 	if (symPathWriter)
@@ -4006,16 +4089,25 @@ void Executor::runFunctionAsMain(Function *f, int argc, char **argv,
 		statsTracker->framePushed(*state, 0);
 
 	assert(arguments.size() == f->arg_size() && "wrong number of arguments");
-	for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
+	for (unsigned i = 0, e = f->arg_size(); i != e; ++i) {
 		bindArgument(kf, i, state->currentThread, arguments[i]);
+		if (prefix)
+			bindArgument(kf, i, twinState->currentThread, twinArgs[i]);
+	}
 
 	if (argvMO) {
 		ObjectState *argvOS = bindObjectInState(*state, argvMO, false);
+		ObjectState *argvOS1 = NULL;
+		if (prefix)
+			argvOS1 = bindObjectInState(*twinState, twinMO, false);
 
 		for (int i = 0; i < argc + 1 + envc + 1 + 1; i++) {
+
 			if (i == argc || i >= argc + 1 + envc) {
 				// Write NULL pointer
 				argvOS->write(i * NumPtrBytes, Expr::createPointer(0));
+				if (prefix)
+					argvOS1->write(i * NumPtrBytes, Expr::createPointer(0));
 			} else {
 				char *s = i < argc ? argv[i] : envp[i - (argc + 1)];
 				int j, len = strlen(s);
@@ -4024,23 +4116,38 @@ void Executor::runFunctionAsMain(Function *f, int argc, char **argv,
 //        arg->isArg = 1;
 				MemoryObject *arg = memory->allocate(len + 1, true, false,
 						state->currentThread->pc->inst);
+				MemoryObject *arg1 = NULL;
+				if (prefix)
+					arg1 = memory->allocate(len + 1, true, false,
+							twinState->currentThread->pc->inst);
 				ObjectState *os = bindObjectInState(*state, arg, false);
+				ObjectState *os1 = NULL;
+				if (prefix)
+					os1 = bindObjectInState(*twinState, arg1, false);
 				for (j = 0; j < len + 1; j++)
 					os->write8(j, s[j]);
+				if (prefix) {
+					for (j = 0; j < len + 1; j++)
+						os1->write8(j, s[j]);
+				}
 
 				// Write pointer to newly allocated and initialised argv/envp c-string
 				argvOS->write(i * NumPtrBytes, arg->getBaseExpr());
+				if (prefix)
+					argvOS1->write(i * NumPtrBytes, arg1->getBaseExpr());
 			}
 		}
 	}
 
-	initializeGlobals(*state);
+	initializeGlobals(*state, *twinState);
+//	if (prefix)
+//		initializeGlobals(*twinState);
 
 //  processTree = new PTree(state);
 //  ptreeVector[nextThreadId] = processTree;
 //
 //  state->ptreeNode = processTree->root;
-	run(*state);
+	run(*state, *twinState);
 
 	//delete processTree;
 	//processTree = 0;
@@ -4221,9 +4328,9 @@ unsigned Executor::executePThreadCreate(ExecutionState &state, KInstruction *ki,
 		}
 		KFunction *kthreadEntrance = kmodule->functionMap[threadEntrance];
 		Thread* newThread = NULL;
-		if (prefix && !prefix->isFinished()) {
+		if (state.prefix && !state.prefix->isFinished()) {
 			newThread = state.createThread(kthreadEntrance,
-					prefix->getNextThreadId());
+					state.prefix->getNextThreadId());
 		} else {
 			newThread = state.createThread(kthreadEntrance);
 		}
@@ -4269,12 +4376,12 @@ unsigned Executor::executePThreadJoin(ExecutionState &state, KInstruction *ki,
 		Thread* joinThread = state.findThreadById(threadId);
 		if (joinThread) {
 			if (!joinThread->isTerminated()) {
-				map<unsigned, vector<unsigned> >::iterator ji = joinRecord.find(
+				map<unsigned, vector<unsigned> >::iterator ji = state.joinRecord.find(
 						threadId);
-				if (ji == joinRecord.end()) {
+				if (ji == state.joinRecord.end()) {
 					vector<unsigned> blockedList;
 					blockedList.push_back(state.currentThread->threadId);
-					joinRecord.insert(make_pair(threadId, blockedList));
+					state.joinRecord.insert(make_pair(threadId, blockedList));
 				} else {
 					ji->second.push_back(state.currentThread->threadId);
 				}
@@ -4307,7 +4414,7 @@ unsigned Executor::executePThreadCondWait(ExecutionState &state,
 	string condName = Transfer::uint64toString(condAddress->getZExtValue());
 	string mutexName = Transfer::uint64toString(mutexAddress->getZExtValue());
 	string errorMsg;
-	bool isSuccess = condManager.wait(condName, mutexName,
+	bool isSuccess = state.condManager.wait(condName, mutexName,
 			state.currentThread->threadId, errorMsg);
 	if (isSuccess) {
 		state.swapOutThread(state.currentThread, true, false, false, false);
@@ -4330,7 +4437,7 @@ unsigned Executor::executePThreadCondSignal(ExecutionState &state,
 	string condName = Transfer::uint64toString(condAddress->getZExtValue());
 	string errorMsg;
 	unsigned releasedThreadId;
-	bool isSuccess = condManager.signal(condName, releasedThreadId, errorMsg);
+	bool isSuccess = state.condManager.signal(condName, releasedThreadId, errorMsg);
 	if (isSuccess) {
 		if (releasedThreadId != 0) {
 			state.swapInThread(releasedThreadId, false, true);
@@ -4354,8 +4461,9 @@ unsigned Executor::executePThreadCondBroadcast(ExecutionState &state,
 	string condName = Transfer::uint64toString(condAddress->getZExtValue());
 	vector<unsigned> threadList;
 	string errorMsg;
-	bool isSuccess = condManager.broadcast(condName, threadList, errorMsg);
+	bool isSuccess = state.condManager.broadcast(condName, threadList, errorMsg);
 	if (isSuccess) {
+		std::cerr << "isSuccess in executePThreadCondBroadcast\n";
 		vector<unsigned>::iterator ti, te;
 		vector<bool>::iterator bi;
 		for (ti = threadList.begin(), te = threadList.end(); ti != te;
@@ -4381,7 +4489,7 @@ unsigned Executor::executePThreadMutexLock(ExecutionState &state,
 		string key = Transfer::uint64toString(mutexAddress->getZExtValue());
 		string errorMsg;
 		bool isBlocked;
-		bool isSuccess = mutexManager.lock(key, state.currentThread->threadId,
+		bool isSuccess = state.mutexManager.lock(key, state.currentThread->threadId,
 				isBlocked, errorMsg);
 		if (isSuccess) {
 			if (isBlocked) {
@@ -4407,7 +4515,7 @@ unsigned Executor::executePThreadMutexUnlock(ExecutionState &state,
 	if (mutexAddress) {
 		string key = Transfer::uint64toString(mutexAddress->getZExtValue());
 		string errorMsg;
-		bool isSuccess = mutexManager.unlock(key, errorMsg);
+		bool isSuccess = state.mutexManager.unlock(key, errorMsg);
 		if (!isSuccess) {
 			cerr << errorMsg << endl;
 			assert(0 && "unlock error");
@@ -4434,7 +4542,7 @@ unsigned Executor::executePThreadBarrierInit(ExecutionState &state,
 	string barrierName = Transfer::uint64toString(
 			barrierAddress->getZExtValue());
 	string errorMsg;
-	bool isSuccess = barrierManager.init(barrierName, count->getZExtValue(),
+	bool isSuccess = state.barrierManager.init(barrierName, count->getZExtValue(),
 			errorMsg);
 	if (!isSuccess) {
 		cerr << errorMsg << endl;
@@ -4457,7 +4565,7 @@ unsigned Executor::executePThreadBarrierWait(ExecutionState &state,
 	vector<unsigned> blockedList;
 	bool isReleased = false;
 	string errorMsg;
-	bool isSuccess = barrierManager.wait(barrierName,
+	bool isSuccess = state.barrierManager.wait(barrierName,
 			state.currentThread->threadId, isReleased, blockedList, errorMsg);
 	if (isSuccess) {
 		if (isReleased) {
@@ -4609,20 +4717,20 @@ void Executor::createSpecialElement(ExecutionState& state, Type* type,
 			}
 			if (type->getStructName() == "union.pthread_mutex_t") {
 				string mutexName = Transfer::uint64toString(startAddress);
-				mutexManager.addMutex(mutexName, errorMsg);
+				state.mutexManager.addMutex(mutexName, errorMsg);
 				startAddress += kmodule->targetData->getTypeSizeInBits(type)
 						/ 8;
 			} else if (type->getStructName() == "union.pthread_cond_t") {
 				string condName = Transfer::uint64toString(startAddress);
-				if (prefix) {
-					condManager.addCondition(condName, errorMsg, prefix);
+				if (state.prefix) {
+					state.condManager.addCondition(condName, errorMsg, state.prefix);
 				} else {
-					condManager.addCondition(condName, errorMsg);
+					state.condManager.addCondition(condName, errorMsg);
 				}
 				startAddress += kmodule->targetData->getTypeSizeInBits(type)
 						/ 8;
 			} else if (type->getStructName() == "union.pthread_barrier_t") {
-				barrierManager.addBarrier(
+				state.barrierManager.addBarrier(
 						Transfer::uint64toString(startAddress), errorMsg);
 				startAddress += kmodule->targetData->getTypeSizeInBits(type)
 						/ 8;
@@ -4689,7 +4797,6 @@ void Executor::runRaceDetect(llvm::Function *f, int argc, char **argv,
 		execStatus = SUCCESS;
 		runFunctionAsMain(f,argc, argv, envp);
 		if (isSymbolicRun && executionNum == 0) {
-			std::cerr << "executed once\n";
 			prepareSymbolicExecution();
 			runFunctionAsMain(f, argc, argv, envp);
 		}
@@ -4718,10 +4825,6 @@ void Executor::runVerification(llvm::Function *f, int argc, char **argv,
 }
 
 void Executor::prepareSymbolicExecution() {
-	mutexManager.clear();
-	condManager.clear();
-	barrierManager.clear();
-	joinRecord.clear();
 	Thread::nextThreadId = 1;
 	if (prefix) {
 		prefix->reuse();
@@ -4740,10 +4843,6 @@ void Executor::prepareNextExecution() {
 	barrierManager.print(cerr);
 #endif
 	isSymbolicRun = 0;
-	mutexManager.clear();
-	condManager.clear();
-	barrierManager.clear();
-	joinRecord.clear();
 	Thread::nextThreadId = 1;
 	executionNum++;
 	for (std::set<ExecutionState*>::const_iterator it = states.begin(), ie =

@@ -67,7 +67,10 @@ namespace klee {
       update(current, std::set<ExecutionState*>(), tmp);
     }
 
+    unsigned RRCount = 0;
+
     enum CoreSearchType {
+  	  RR,
       DFS,
       BFS,
       RandomState,
@@ -94,6 +97,21 @@ namespace klee {
     void printName(std::ostream &os) {
       os << "DFSSearcher\n";
     }
+  };
+
+
+  class RRSearcher : public Searcher {
+	  std::vector<ExecutionState*> states;
+
+  public:
+	  ExecutionState &selectState();
+	  void update(ExecutionState *current,
+	               const std::set<ExecutionState*> &addedStates,
+	               const std::set<ExecutionState*> &removedStates);
+	  bool empty() { return states.empty(); }
+	  void printName(std::ostream &os) {
+	      os << "RRSearcher\n";
+	  }
   };
 
   class BFSSearcher : public Searcher {

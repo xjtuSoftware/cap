@@ -20,6 +20,9 @@
 #include "../../lib/Core/Thread.h"
 #include "./../lib/Core/ThreadList.h"
 #include "./../lib/Core/Prefix.h"
+#include "./../lib/Core/MutexManager.h"
+#include "./../lib/Core/CondManager.h"
+#include "./../lib/Core/BarrierManager.h"
 #include <map>
 #include <set>
 #include <vector>
@@ -88,6 +91,12 @@ public:
   AddressSpace addressSpace;
   TreeOStream pathOS, symPathOS;
   unsigned instsSinceCovNew;
+
+
+  //added by PeiLIU
+  Prefix * prefix;
+  unsigned countThread;
+
   bool coveredNew;
 
   /// Disables forking, set by user code.
@@ -108,7 +117,6 @@ public:
   // Used by the checkpoint/rollback methods for fake objects.
   // FIXME: not freeing things on branch deletion.
   MemoryMap shadowObjects;
-
 
 
   //unsigned incomingBBIndex;
@@ -134,6 +142,18 @@ public:
   ThreadScheduler* threadScheduler;
   ThreadList threadList;
   Thread* currentThread;
+
+
+  MutexManager mutexManager;
+
+  CondManager condManager;
+
+  BarrierManager barrierManager;
+
+  //std::set<ExecutionState*> allThread; // all threads
+
+  std::map<unsigned, std::vector<unsigned> > joinRecord; // store the relation of join, key->threadId, value->a list of threads that are waiting key's termination
+
 
 private:
   //ExecutionState() : fakeState(false), underConstrained(0), ptreeNode(0) {}

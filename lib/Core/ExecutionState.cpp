@@ -97,7 +97,11 @@ ExecutionState::ExecutionState(KFunction *kf)
     weight(1),
     instsSinceCovNew(0),
     coveredNew(false),
-    forkDisabled(false)
+	countThread(1),
+	prefix(0),
+    forkDisabled(false),
+	mutexManager(),
+	condManager()
     //ptreeNode(0)
 	{
 
@@ -107,6 +111,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 	threadList.addThread(thread);
 	threadScheduler->addItem(thread);
 	currentThread = thread;
+	condManager.setMutexManager(&mutexManager);
 }
 
 ExecutionState::ExecutionState(KFunction *kf, Prefix* prefix)
@@ -116,17 +121,23 @@ ExecutionState::ExecutionState(KFunction *kf, Prefix* prefix)
     queryCost(0.),
     weight(1),
     instsSinceCovNew(0),
+	prefix(prefix),
+	countThread(1),
     coveredNew(false),
-    forkDisabled(false)
+    forkDisabled(false),
+	mutexManager(),
+	condManager()
     //ptreeNode(0)
 	{
 
 	threadScheduler = new GuidedThreadScheduler(this, ThreadScheduler::FIFS, prefix);
 	//threadScheduler = new GuidedThreadScheduler(this, ThreadScheduler::Preemptive, prefix);
-	Thread* thread = new Thread(Thread::getNextThreadId(), NULL, &addressSpace, kf);
+	unsigned threadId = Thread::getAltNextThreadId(0);
+	Thread* thread = new Thread(threadId, NULL, &addressSpace, kf);
 	threadList.addThread(thread);
 	threadScheduler->addItem(thread);
 	currentThread = thread;
+	condManager.setMutexManager(&mutexManager);
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions) 
@@ -175,7 +186,11 @@ ExecutionState::ExecutionState(const ExecutionState& state)
     //ptreeNode(state.ptreeNode),
     symbolics(state.symbolics),
     arrayNames(state.arrayNames),
-    shadowObjects(state.shadowObjects)
+	prefix(state.prefix),
+	countThread(state.countThread),
+    shadowObjects(state.shadowObjects),
+	mutexManager(state.mutexManager),
+	condManager(state.condManager)
 //    incomingBBIndex(state.incomingBBIndex),
 //    threadId(state.threadId),
 //    parentThread(NULL),
@@ -198,6 +213,7 @@ ExecutionState *ExecutionState::branch() {
   depth++;
 
   ExecutionState *falseState = new ExecutionState(*this);
+  falseState->condManager.setMutexManager(&this->mutexManager);
   falseState->coveredNew = false;
   falseState->coveredLines.clear();
 
@@ -477,7 +493,8 @@ Thread* ExecutionState::createThread(KFunction *kf) {
 
 Thread* ExecutionState::createThread(KFunction *kf, unsigned threadId) {
 	if (threadId >= Thread::nextThreadId) {
-		Thread::nextThreadId = threadId + 1;
+//		Thread::nextThreadId = threadId + 1;
+		Thread::getAltNextThreadId(0);
 	}
 	Thread* newThread = new Thread(threadId, currentThread, &addressSpace, kf);
 	threadList.addThread(newThread);

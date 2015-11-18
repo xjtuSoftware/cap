@@ -69,6 +69,7 @@ bool CondManager::broadcast(string condName, vector<unsigned>& threads, string& 
 		for (vector<WaitParam*>::iterator wi = itemList.begin(), we = itemList.end(); wi != we; wi++, ti++) {
 			WaitParam* wp = *wi;
 			*ti = wp->threadId;
+			std::cerr << "broadcast addBlockedThread\n";
 			mutexManager->addBlockedThread(wp->threadId, wp->mutexName);
 			delete wp;
 		}

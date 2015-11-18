@@ -64,6 +64,10 @@ public:
 		int order; //the order of a event
 		Event *event;
 	};
+	struct OrderPair {
+		int lower;
+		int upper;
+	};
 
 	void printEventSeq(vector<Event *> &eventSequence);
 	void buildRaceFormula();
@@ -76,6 +80,8 @@ public:
 	void getPossibleRaceTrace();
 	void getEventSequence(vector<struct Pair> &, vector<Event *> &, Event *, Event *);
 	void exchangeUnderEqual(vector<struct Pair> &, struct racePair &);
+	void addReadWriteSet(struct globalEvent &, std::map<string, string> &, std::set<string> &);
+	void deleteReadWriteSet(map<string, string> &, std::set<string> &);
 
 
 private:

@@ -44,6 +44,7 @@ StackFrame::~StackFrame() {
 }
 
 unsigned Thread::nextThreadId = 1;
+int Thread::executeFlag = -1;
 
 Thread::Thread() {
 	// TODO Auto-generated constructor stub
@@ -71,7 +72,7 @@ Thread::Thread(Thread& anotherThread, AddressSpace* addressSpace)
 	  parentThread(anotherThread.parentThread),
 	  addressSpace(addressSpace),
 	  threadState(anotherThread.threadState),
-	  stack(anotherThread.stack) {
+	  stack(anotherThread.stack){
 
 }
 

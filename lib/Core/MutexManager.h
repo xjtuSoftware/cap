@@ -20,10 +20,11 @@ namespace klee {
 class MutexManager {
 private:
 	std::map< std::string, Mutex* > mutexPool;
-	std::map< unsigned, Mutex* > blockedThreadPool;
+
 	unsigned nextMutexId;
 
 public:
+	std::map< unsigned, Mutex* > blockedThreadPool;
 	MutexManager();
 	virtual ~MutexManager();
 	bool lock(std::string mutexName, unsigned threadId,  bool& isBlocked, std::string& errorMsg);
