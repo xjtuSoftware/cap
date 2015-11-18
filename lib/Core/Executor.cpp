@@ -3128,7 +3128,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 //    	}
 //    }
 		KInstruction *ki = thread->pc;
-		ki->inst->dump();
+//		ki->inst->dump();
 		if (state.prefix && !state.prefix->isFinished() && ki != state.prefix->getCurrentInst()) {
 			//cerr << "prefix: " << prefix->getCurrentInst() << " " << prefix->getCurrentInst()->inst->getOpcodeName() << " reality: " << ki << " " << ki->inst->getOpcodeName() << endl;
 			cerr << "thread id : " << thread->threadId << "\n";

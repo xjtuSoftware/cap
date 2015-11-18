@@ -631,7 +631,7 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 //						}
 //						cerr << endl;
 //					}
-					cerr << "address = " << realAddress->getZExtValue() << endl;
+//					cerr << "address = " << realAddress->getZExtValue() << endl;
 				} else {
 					cerr << "Load address = " << realAddress->getZExtValue()
 							<< endl;
