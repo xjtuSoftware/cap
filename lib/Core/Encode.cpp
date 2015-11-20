@@ -333,7 +333,7 @@ void Encode::exchangeUnderEqual(vector<struct Pair> &altSequence, struct racePai
 					continue;
 				}
 				if (eOrder == -1)
-						eOrder = index;
+					eOrder = index;
 				}
 			}
 	}
@@ -366,10 +366,10 @@ void Encode::exchangeUnderEqual(vector<struct Pair> &altSequence, struct racePai
 	stringstream ss;
 	ss << vecEvent[firstPos]->eventName << vecEvent[secondPos]->eventName;
 	std::cerr << "ss1.name = " << ss.str() << std::endl;
-	printEventSeq(vecEvent);
+//	printEventSeq(vecEvent);
 	Prefix* prefix = new Prefix(vecEvent, trace->createThreadPoint,
 								ss.str());
-	showPrefixInfo(prefix, 0);
+//	showPrefixInfo(prefix, 0);
 #if FORMULA_DEBUG
 	stringstream output;
 	output << "./output_info/" << prefix->getName() << ".z3expr";
@@ -388,9 +388,9 @@ void Encode::exchangeUnderEqual(vector<struct Pair> &altSequence, struct racePai
 	vecEvent[secondPos] = changeEvent;
 	ss << vecEvent[firstPos]->eventName << vecEvent[secondPos]->eventName;
 	std::cerr << "ss2.name = " << ss.str() << std::endl;
-	printEventSeq(vecEvent);
+//	printEventSeq(vecEvent);
 	Prefix *prefix1 = new Prefix(vecEvent, trace->createThreadPoint, ss.str());
-	showPrefixInfo(prefix1, 0);
+//	showPrefixInfo(prefix1, 0);
 #if FORMULA_DEBUG
 	stringstream output1;
 	output1 << "./output_info/" << prefix1->getName() << ".z3expr";
@@ -663,6 +663,58 @@ void Encode::raceFromCandidate(vector<struct racePair> &raceCandidate)
 	}
 }
 
+void Encode::buildRaceTraceFromLockSet() {
+	vector<struct globalEvent> readGlobalSet;
+	vector<struct globalEvent> writeGlobalSet;
+
+	unsigned eventLen = trace->eventList.size();
+	std::cerr << "eventLen = " << eventLen << "\n";
+	for (unsigned tid = 0; tid < eventLen; tid++) {
+		std::vector<Event*> *thread = trace->eventList[tid];
+		if (thread == NULL)
+			continue;
+		for (unsigned index = 0, threadLen = thread->size(); index < threadLen; index++) {
+			Event *event = thread->at(index);
+			if (event == NULL || event->eventType == Event::VIRTUAL
+					|| event->eventType == Event::IGNORE)
+				continue;
+			if (trace->raceCandidateVar.count(event->varName) == 1) {
+				if (event->isGlobal) {
+					Event *preEvent = NULL;
+					Event *postEvent = NULL;
+					struct globalEvent globalTemp;
+
+					globalTemp.event = event;
+					for (int i = index - 1; i >= 0; i--) {
+							if (thread->at(i)->eventName != event->eventName) {
+								preEvent = thread->at(i);
+								break;
+							}
+					}
+					globalTemp.preEvent = preEvent;
+					for (unsigned int j = index + 1; j < threadLen; j++) {
+						if (thread->at(j)->eventName != event->eventName) {
+							postEvent = thread->at(j);
+							break;
+						}
+					}
+					globalTemp.postEvent = postEvent;
+					if (event->inst->inst->getOpcode() == Instruction::Store) {
+						writeGlobalSet.push_back(globalTemp);
+					}
+					if (event->inst->inst->getOpcode() == Instruction::Load) {
+						readGlobalSet.push_back(globalTemp);
+					}
+				}
+			}
+		}
+	}
+	std::cerr << "build race candidate from lock set: read size = " <<
+			readGlobalSet.size() << " && write size = " << writeGlobalSet.size() << "\n";
+	getRaceCandidate(readGlobalSet, writeGlobalSet);
+}
+
+
 void Encode::buildRaceTrace()
 {
 	vector<struct globalEvent> readGlobalSet;
@@ -682,6 +734,7 @@ void Encode::buildRaceTrace()
 			if (event->isGlobal) {
 				Event *preEvent = NULL;
 				Event *postEvent = NULL;
+				event->inst->inst->dump();
 				struct globalEvent globalTemp;
 
 				globalTemp.event = event;
@@ -708,7 +761,8 @@ void Encode::buildRaceTrace()
 			}
 		}
 	}
-	std::cerr << "read size = " << readGlobalSet.size() << " && write size = " << writeGlobalSet.size() << "\n";
+	std::cerr << "read size = " << readGlobalSet.size() <<
+			" && write size = " << writeGlobalSet.size() << "\n";
 	getRaceCandidate(readGlobalSet, writeGlobalSet);
 }
 
@@ -718,7 +772,8 @@ void Encode::getPossibleRaceTrace()
 	std::cerr << "getPossibleRaceTrace\n";
 //	buildRaceFormula();
 //	addBrConstraint();
-	buildRaceTrace();
+	buildRaceTraceFromLockSet();
+//	buildRaceTrace();
 }
 
 void Encode::addBrConstraint(Event * event)

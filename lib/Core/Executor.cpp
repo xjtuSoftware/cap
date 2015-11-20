@@ -3006,7 +3006,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 
 	searcher->update(0, states, std::set<ExecutionState*>());
 
-	if (!isSymbolicRun && executionNum == 0) {
+	if (!isSymbolicRun) {
 		for (std::vector<BitcodeListener*>::iterator bit =
 				bitcodeListeners.begin(), bie = bitcodeListeners.end();
 				bit != bie; ++bit) {
@@ -4463,7 +4463,6 @@ unsigned Executor::executePThreadCondBroadcast(ExecutionState &state,
 	string errorMsg;
 	bool isSuccess = state.condManager.broadcast(condName, threadList, errorMsg);
 	if (isSuccess) {
-		std::cerr << "isSuccess in executePThreadCondBroadcast\n";
 		vector<unsigned>::iterator ti, te;
 		vector<bool>::iterator bi;
 		for (ti = threadList.begin(), te = threadList.end(); ti != te;

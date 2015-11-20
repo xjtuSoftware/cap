@@ -19,6 +19,7 @@
 #endif
 #include "llvm/Support/raw_ostream.h"
 #include <map>
+#include <stack>
 #include <vector>
 #include <sstream>
 
@@ -45,6 +46,22 @@ public:
 		REDUNDANT, // the trace is a redundant trace
 		FAILED // the trace is failed during execution
 	};
+	//global variable state used for implements
+	//algorithm lockset.
+	enum GlobalVarState {
+		  Virgin,
+		  Execlusive,
+		  Shared,
+		  Shared_Modified
+	};
+
+	struct LockSetDateStruct {
+		std::string globalVarName;
+		std::set<std::string> candidateLock;
+		GlobalVarState globalVarState;
+		int firstWrThreadId;
+	};
+
 	unsigned Id;
 	unsigned nextEventId;
 //	int argc; // input count
@@ -102,10 +119,15 @@ public:
 	void createAbstract();
 	bool isEqual(Trace* trace);
 
+	bool computeIntersect(std::set<std::string> &, std::vector<std::string> &);
+	std::vector<LockSetDateStruct>::iterator getLockSetData(std::string &);
+
 private:
 	/*******************added by xdzhang**********************/
 
 public:
+
+
 	//线程创建与终止操作数据-->生成偏序约束
 	std::map<Event*, uint64_t> createThreadPoint; //key--event, value--created thread id
 	std::map<Event*, uint64_t> joinThreadPoint; //key--event, value--joined thread id
@@ -134,6 +156,12 @@ public:
 	std::map<std::string, llvm::Constant*> global_variable_final;
 	//输出语句printf产生的变量值
 	std::map<std::string, llvm::Constant*> printf_variable_value;//key--full name of var
+
+	std::vector<LockSetDateStruct> allCandidate;
+	std::map<unsigned, std::vector<std::string> > locksHelds;
+	std::map<unsigned, std::vector<std::string> > writeLocksHelds;
+
+	std::set<std::string> raceCandidateVar;
 
 };
 

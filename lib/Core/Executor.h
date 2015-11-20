@@ -120,6 +120,7 @@ public:
 	  RUNTIMEERROR
   };
 
+
 private:
   class TimerInfo;
   KModule *kmodule;

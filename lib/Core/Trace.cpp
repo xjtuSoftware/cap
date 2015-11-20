@@ -586,5 +586,45 @@ bool Trace::isEqual(Trace* trace) {
 	}
 	return same;
 }
+bool Trace::computeIntersect(std::set<std::string> &candidateSet,
+		std::vector<std::string> &locksHeld)
+{
+	if (candidateSet.size() == 0)
+		return true;
+	std::set<std::string> tempSet;
+	for (std::set<std::string>::iterator cit = candidateSet.begin(), cie = candidateSet.end();
+			cit != cie; cit++) {
+		for (std::vector<std::string>::iterator lit = locksHeld.begin(), lie = locksHeld.end();
+				lit != lie; lit++) {
+			if (*cit == *lit) {
+				tempSet.insert(*cit);
+			}
+		}
+	}
+	//clear candidate set.
+	if (candidateSet.size() != 0)
+		candidateSet.clear();
+	std::cerr << "after clear the set size = " << candidateSet.size() << std::endl;
+	if (tempSet.size() != 0)
+		candidateSet.insert(tempSet.begin(), tempSet.end());
+	if (candidateSet.size() == 0)
+		return true;
+	return false;
+}
+
+std::vector<Trace::LockSetDateStruct>::iterator Trace::getLockSetData(std::string& tmpStr)
+{
+	std::vector<Trace::LockSetDateStruct>::iterator it = allCandidate.begin();
+	std::vector<Trace::LockSetDateStruct>::iterator ie = allCandidate.end();
+	for (; it != ie; it++) {
+		if (it->globalVarName == tmpStr) {
+			break;
+		}
+	}
+	std::cerr << "tmpStr = " << tmpStr << std::endl;
+//	if (it == ie)
+//		assert(0 && "could not find the get the LockSetDateStruct\n");
+	return it;
+}
 
 } /* namespace klee */

@@ -73,6 +73,7 @@ public:
 	void buildRaceFormula();
 	void addBrConstraint(Event *);
 	void buildRaceTrace();
+	void buildRaceTraceFromLockSet();
 	void getRaceCandidate(vector<struct globalEvent> &readGlobalSet,
 			vector<struct globalEvent> &writeGlobalSet);
 	void raceFromCandidate(vector<struct racePair> &raceCandidate);
