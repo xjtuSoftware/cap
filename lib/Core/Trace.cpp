@@ -604,7 +604,7 @@ bool Trace::computeIntersect(std::set<std::string> &candidateSet,
 	//clear candidate set.
 	if (candidateSet.size() != 0)
 		candidateSet.clear();
-	std::cerr << "after clear the set size = " << candidateSet.size() << std::endl;
+//	std::cerr << "after clear the set size = " << candidateSet.size() << std::endl;
 	if (tempSet.size() != 0)
 		candidateSet.insert(tempSet.begin(), tempSet.end());
 	if (candidateSet.size() == 0)
@@ -621,7 +621,7 @@ std::vector<Trace::LockSetDateStruct>::iterator Trace::getLockSetData(std::strin
 			break;
 		}
 	}
-	std::cerr << "tmpStr = " << tmpStr << std::endl;
+//	std::cerr << "tmpStr = " << tmpStr << std::endl;
 //	if (it == ie)
 //		assert(0 && "could not find the get the LockSetDateStruct\n");
 	return it;

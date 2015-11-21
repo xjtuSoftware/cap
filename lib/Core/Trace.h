@@ -50,7 +50,7 @@ public:
 	//algorithm lockset.
 	enum GlobalVarState {
 		  Virgin,
-		  Execlusive,
+		  Exclusive,
 		  Shared,
 		  Shared_Modified
 	};

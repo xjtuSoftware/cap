@@ -979,16 +979,18 @@ void PSOListener::afterRunMethodAsMain() {
 		}
 
 		//initialize lockset algorithm needs data structure.
-		Trace::LockSetDateStruct lsds;
-		for (std::map<std::string, llvm::Constant*>::iterator it =
+		if (executor->executionNum == 0) {
+			Trace::LockSetDateStruct lsds;
+			for (std::map<std::string, llvm::Constant*>::iterator it =
 				trace->global_variable_initializer.begin(), ie = trace->global_variable_initializer.end();
 				it != ie; it++) {
-			lsds.globalVarName = it->first;
-			std::cerr << "globalVarName = " << it->first << std::endl;
-			lsds.globalVarState = Trace::Virgin;
-			lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
-			lsds.firstWrThreadId = -1;
-			trace->allCandidate.push_back(lsds);
+				lsds.globalVarName = it->first;
+				std::cerr << "globalVarName = " << it->first << std::endl;
+				lsds.globalVarState = Trace::Virgin;
+				lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
+				lsds.firstWrThreadId = -1;
+				trace->allCandidate.push_back(lsds);
+			}
 		}
 
 		//this statement could remove meaningless.
@@ -2095,39 +2097,59 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 			if ((*currentEvent)->isGlobal) {
 				if (isFloat || id == Type::IntegerTyID) {
 					//指针！！！
-					ki->inst->dump();
+//					ki->inst->dump();
 					std::vector<Trace::LockSetDateStruct>::iterator temp =
 							trace->getLockSetData((*currentEvent)->varName);
 
-					if (temp != trace->allCandidate.end()) {
-					switch (temp->globalVarState) {
-					case Trace::Virgin:
-						break;
-					case Trace::Execlusive:
-						if (temp->firstWrThreadId != (int)(*currentEvent)->threadId) {
-							temp->globalVarState = Trace::Shared;
+					if (temp == trace->allCandidate.end()) {
+						std::vector<std::string> allLocks;
+						for(std::map<std::string, std::vector<LockPair *> >::iterator it =
+								trace->all_lock_unlock.begin(), ie = trace->all_lock_unlock.end();
+								it != ie; it++) {
+							allLocks.push_back(it->first);
 						}
-						break;
-					case Trace::Shared:
-//						if (temp->candidateLock.size() != 0)
-							trace->computeIntersect(temp->candidateLock,
-								trace->locksHelds[(*currentEvent)->threadId]);
-						break;
-					case Trace::Shared_Modified:
-//						if (temp->candidateLock.size() == 0) {
-//							std::cerr << "Load Inst: candidateLock empty " <<
-//									(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
-//						} else {
+						std::cerr << "Load: allLocks size = " <<
+								allLocks.size() << std::endl;
+						Trace::LockSetDateStruct lsds;
+						lsds.firstWrThreadId = (*currentEvent)->threadId;
+						lsds.globalVarName = (*currentEvent)->varName;
+						lsds.globalVarState = Trace::Virgin;
+						lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
+						std::cerr << "Load: candidateLock size = " <<
+								trace->allCandidate.size() << std::endl;
+						trace->allCandidate.push_back(lsds);
+						std::cerr << "Load: candidateLock size = " <<
+								trace->allCandidate.size() << std::endl;
+					} else {
+//					if (temp != trace->allCandidate.end()) {
+						switch (temp->globalVarState) {
+						case Trace::Virgin:
+							break;
+						case Trace::Exclusive:
+							if (temp->firstWrThreadId != (int)(*currentEvent)->threadId) {
+								temp->globalVarState = Trace::Shared;
+							}
+							break;
+						case Trace::Shared:
+//							if (temp->candidateLock.size() != 0)
+								trace->computeIntersect(temp->candidateLock,
+									trace->locksHelds[(*currentEvent)->threadId]);
+							break;
+						case Trace::Shared_Modified:
+//							if (temp->candidateLock.size() == 0) {
+//								std::cerr << "Load Inst: candidateLock empty " <<
+//										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
+//							} else {
 							bool flag = trace->computeIntersect(temp->candidateLock,
 									trace->locksHelds[(*currentEvent)->threadId]);
 							if (flag) {
 								trace->raceCandidateVar.insert((*currentEvent)->varName);
-								std::cerr << "Load Inst: a data race could happen on var " <<
-										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
+//								std::cerr << "Load Inst: a data race could happen on var " <<
+//										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 							}
 //						}
-						break;
-					}
+							break;
+						}
 					}
 				}
 #if PTR
@@ -2182,38 +2204,58 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 						trace->writeLocksHelds[(*currentEvent)->threadId].push_back(
 								trace->locksHelds[(*currentEvent)->threadId].back());
 					//the operation of intersect
-					ki->inst->dump();
-					std::vector<Trace::LockSetDateStruct>::iterator temp = trace->getLockSetData((*currentEvent)->varName);
-
-					if (temp != trace->allCandidate.end()) {
-					switch (temp->globalVarState) {
-					case Trace::Virgin:
-						temp->globalVarState = Trace::Execlusive;
-						temp->firstWrThreadId = (*currentEvent)->threadId;
-						break;
-					case Trace::Execlusive:
-						if (temp->firstWrThreadId != (int)(*currentEvent)->threadId) {
-							temp->globalVarState = Trace::Shared_Modified;
+//					ki->inst->dump();
+					std::vector<Trace::LockSetDateStruct>::iterator temp =
+							trace->getLockSetData((*currentEvent)->varName);
+					if (temp == trace->allCandidate.end()) {
+						std::vector<std::string> allLocks;
+						for(std::map<std::string, std::vector<LockPair *> >::iterator it =
+								trace->all_lock_unlock.begin(), ie = trace->all_lock_unlock.end();
+								it != ie; it++) {
+							allLocks.push_back(it->first);
 						}
-						break;
-					case Trace::Shared:
-						temp->globalVarState = Trace::Shared_Modified;
-						break;
-					case Trace::Shared_Modified:
-//						if (temp->candidateLock.size() == 0) {
-//							std::cerr << "Store Inst: candidateLock empty " <<
-//									(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
-//						} else {
+						std::cerr << "Store: allLocks size = " <<
+								allLocks.size() << std::endl;
+						Trace::LockSetDateStruct lsds;
+						lsds.firstWrThreadId = (*currentEvent)->threadId;
+						lsds.globalVarName = (*currentEvent)->varName;
+						lsds.globalVarState = Trace::Exclusive;
+						lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
+						std::cerr << "Store: candidateLock size = " <<
+								trace->allCandidate.size() << std::endl;
+						trace->allCandidate.push_back(lsds);
+						std::cerr << "Store: after push_back candidateLock size = " <<
+								trace->allCandidate.size() << std::endl;
+					} else {
+//					if (temp != trace->allCandidate.end()) {
+						switch (temp->globalVarState) {
+						case Trace::Virgin:
+							temp->globalVarState = Trace::Exclusive;
+							temp->firstWrThreadId = (*currentEvent)->threadId;
+							break;
+						case Trace::Exclusive:
+							if (temp->firstWrThreadId != (int)(*currentEvent)->threadId) {
+								temp->globalVarState = Trace::Shared_Modified;
+							}
+							break;
+						case Trace::Shared:
+							temp->globalVarState = Trace::Shared_Modified;
+							break;
+						case Trace::Shared_Modified:
+//							if (temp->candidateLock.size() == 0) {
+//								std::cerr << "Store Inst: candidateLock empty " <<
+//										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
+//							} else {
 							bool flag = trace->computeIntersect(temp->candidateLock,
 									trace->writeLocksHelds[(*currentEvent)->threadId]);
 							if (flag) {
 								trace->raceCandidateVar.insert((*currentEvent)->varName);
-								std::cerr << "Store Inst: a data race could happen on var " <<
-										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
+//								std::cerr << "Store Inst: a data race could happen on var " <<
+//										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 							}
-//						}
-						break;
-					}
+//							}
+							break;
+						}
 					}
 
 				}
