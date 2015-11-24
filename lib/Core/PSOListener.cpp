@@ -2111,7 +2111,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 						std::cerr << "Load: allLocks size = " <<
 								allLocks.size() << std::endl;
 						Trace::LockSetDateStruct lsds;
-						lsds.firstWrThreadId = (*currentEvent)->threadId;
+						lsds.firstWrThreadId = -1;
 						lsds.globalVarName = (*currentEvent)->varName;
 						lsds.globalVarState = Trace::Virgin;
 						lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
@@ -2140,6 +2140,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 //								std::cerr << "Load Inst: candidateLock empty " <<
 //										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 //							} else {
+
 							bool flag = trace->computeIntersect(temp->candidateLock,
 									trace->locksHelds[(*currentEvent)->threadId]);
 							if (flag) {
@@ -2200,6 +2201,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 			}
 			if (isFloat || id == Type::IntegerTyID) {
 				if ((*currentEvent)->isGlobal) {
+
 					if (trace->locksHelds[(*currentEvent)->threadId].size() > 0)
 						trace->writeLocksHelds[(*currentEvent)->threadId].push_back(
 								trace->locksHelds[(*currentEvent)->threadId].back());
@@ -2207,6 +2209,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 //					ki->inst->dump();
 					std::vector<Trace::LockSetDateStruct>::iterator temp =
 							trace->getLockSetData((*currentEvent)->varName);
+
 					if (temp == trace->allCandidate.end()) {
 						std::vector<std::string> allLocks;
 						for(std::map<std::string, std::vector<LockPair *> >::iterator it =
@@ -2228,6 +2231,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 								trace->allCandidate.size() << std::endl;
 					} else {
 //					if (temp != trace->allCandidate.end()) {
+						bool flag = false;
 						switch (temp->globalVarState) {
 						case Trace::Virgin:
 							temp->globalVarState = Trace::Exclusive;
@@ -2240,13 +2244,21 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 							break;
 						case Trace::Shared:
 							temp->globalVarState = Trace::Shared_Modified;
+							flag = trace->computeIntersect(temp->candidateLock,
+									trace->writeLocksHelds[(*currentEvent)->threadId]);
+							if (flag) {
+								trace->raceCandidateVar.insert((*currentEvent)->varName);
+//								std::cerr << "Store Inst: a data race could happen on var " <<
+//										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
+							}
 							break;
 						case Trace::Shared_Modified:
 //							if (temp->candidateLock.size() == 0) {
 //								std::cerr << "Store Inst: candidateLock empty " <<
 //										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 //							} else {
-							bool flag = trace->computeIntersect(temp->candidateLock,
+
+							flag = trace->computeIntersect(temp->candidateLock,
 									trace->writeLocksHelds[(*currentEvent)->threadId]);
 							if (flag) {
 								trace->raceCandidateVar.insert((*currentEvent)->varName);

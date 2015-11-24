@@ -684,7 +684,6 @@ void Encode::buildRaceTraceFromLockSet() {
 					Event *postEvent = NULL;
 					struct globalEvent globalTemp;
 
-					event->inst->inst->dump();
 					globalTemp.event = event;
 					for (int i = index - 1; i >= 0; i--) {
 							if (thread->at(i)->eventName != event->eventName) {
