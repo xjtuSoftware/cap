@@ -83,6 +83,7 @@ public:
 	void exchangeUnderEqual(vector<struct Pair> &, struct racePair &);
 	void addReadWriteSet(struct globalEvent &, std::map<string, string> &, std::set<string> &);
 	void deleteReadWriteSet(map<string, string> &, std::set<string> &);
+	void buildPartialRaceFormula();
 
 
 private:

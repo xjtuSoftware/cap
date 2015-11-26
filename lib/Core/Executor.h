@@ -120,6 +120,13 @@ public:
 	  RUNTIMEERROR
   };
 
+  enum RaceCategory {
+	  BenignRace,
+	  HarmfulRace,
+	  PossibleHarmfulRace
+  };
+
+  RaceCategory raceCategory;
 
 private:
   class TimerInfo;

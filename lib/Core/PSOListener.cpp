@@ -985,7 +985,6 @@ void PSOListener::afterRunMethodAsMain() {
 				trace->global_variable_initializer.begin(), ie = trace->global_variable_initializer.end();
 				it != ie; it++) {
 				lsds.globalVarName = it->first;
-				std::cerr << "globalVarName = " << it->first << std::endl;
 				lsds.globalVarState = Trace::Virgin;
 				lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
 				lsds.firstWrThreadId = -1;
@@ -1335,11 +1334,12 @@ void PSOListener::handleExternalFunction(ExecutionState& state,
 			if (resFlag == 0) {
 				vecOutRes.push_back(tmpStr);
 			} else {
-				for (int i = 0; i < vecOutRes.size(); i++) {
-					std::cerr << vecOutRes[i] << std::endl;
-				}
+//				for (int i = 0; i < vecOutRes.size(); i++) {
+//					std::cerr << vecOutRes[i] << std::endl;
+//				}
 				if (vecOutRes[i - 2] != tmpStr) {
-					std::cerr << "output changed\n";
+					executor->raceCategory = Executor::HarmfulRace;
+//					executor->terminateState(state);
 					break;
 				}
 
@@ -1784,7 +1784,8 @@ void PSOListener::getNewPrefix() {
 		delete executor->prefix1;
 		executor->prefix = prefix;
 		executor->prefix1 = prefix1;
-		std::cerr << "execute two prefix " << prefix->getName() << prefix1->getName() << std::endl;
+		std::cerr << "execute two prefix " <<
+				prefix->getName() << prefix1->getName() << std::endl;
 		executor->isFinished = false;
 	} else {
 		executor->isFinished = true;
@@ -2084,6 +2085,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 	if ((*currentEvent)) {
 
 		Instruction* inst = ki->inst;
+//		inst->dump();
 		Thread* thread = state.currentThread;
 		switch (inst->getOpcode()) {
 		case Instruction::Load: {
@@ -2108,18 +2110,18 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 								it != ie; it++) {
 							allLocks.push_back(it->first);
 						}
-						std::cerr << "Load: allLocks size = " <<
-								allLocks.size() << std::endl;
+//						std::cerr << "Load: allLocks size = " <<
+//								allLocks.size() << std::endl;
 						Trace::LockSetDateStruct lsds;
 						lsds.firstWrThreadId = -1;
 						lsds.globalVarName = (*currentEvent)->varName;
 						lsds.globalVarState = Trace::Virgin;
 						lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
-						std::cerr << "Load: candidateLock size = " <<
-								trace->allCandidate.size() << std::endl;
+//						std::cerr << "Load: candidateLock size = " <<
+//								trace->allCandidate.size() << std::endl;
 						trace->allCandidate.push_back(lsds);
-						std::cerr << "Load: candidateLock size = " <<
-								trace->allCandidate.size() << std::endl;
+//						std::cerr << "Load: candidateLock size = " <<
+//								trace->allCandidate.size() << std::endl;
 					} else {
 //					if (temp != trace->allCandidate.end()) {
 						switch (temp->globalVarState) {
@@ -2217,18 +2219,18 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 								it != ie; it++) {
 							allLocks.push_back(it->first);
 						}
-						std::cerr << "Store: allLocks size = " <<
-								allLocks.size() << std::endl;
+//						std::cerr << "Store: allLocks size = " <<
+//								allLocks.size() << std::endl;
 						Trace::LockSetDateStruct lsds;
 						lsds.firstWrThreadId = (*currentEvent)->threadId;
 						lsds.globalVarName = (*currentEvent)->varName;
 						lsds.globalVarState = Trace::Exclusive;
 						lsds.candidateLock.insert(allLocks.begin(), allLocks.end());
-						std::cerr << "Store: candidateLock size = " <<
-								trace->allCandidate.size() << std::endl;
+//						std::cerr << "Store: candidateLock size = " <<
+//								trace->allCandidate.size() << std::endl;
 						trace->allCandidate.push_back(lsds);
-						std::cerr << "Store: after push_back candidateLock size = " <<
-								trace->allCandidate.size() << std::endl;
+//						std::cerr << "Store: after push_back candidateLock size = " <<
+//								trace->allCandidate.size() << std::endl;
 					} else {
 //					if (temp != trace->allCandidate.end()) {
 						bool flag = false;
@@ -2364,10 +2366,12 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 			if (f->getName() == "pthread_mutex_lock") {
 				trace->locksHelds[(*currentEvent)->threadId].push_back((*currentEvent)->mutexName);
 			} else if (f->getName() == "pthread_mutex_unlock") {
-				if (trace->writeLocksHelds.count((*currentEvent)->threadId) == 1 &&
+				if (!trace->writeLocksHelds[(*currentEvent)->threadId].empty() &&
+						trace->writeLocksHelds.count((*currentEvent)->threadId) == 1 &&
 						(trace->locksHelds[(*currentEvent)->threadId].back() ==
-							trace->writeLocksHelds[(*currentEvent)->threadId].back()))
-						trace->writeLocksHelds[(*currentEvent)->threadId].pop_back();
+							trace->writeLocksHelds[(*currentEvent)->threadId].back())) {
+					trace->writeLocksHelds[(*currentEvent)->threadId].pop_back();
+				}
 				trace->locksHelds[(*currentEvent)->threadId].pop_back();
 			}
 			break;

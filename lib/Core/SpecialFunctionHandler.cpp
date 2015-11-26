@@ -336,9 +336,10 @@ void SpecialFunctionHandler::handleAssertFail(ExecutionState &state,
 				<< readStringAtAddress(state, arguments[0]) << "\n";
 		executor.terminateState(state);
 	} else
-		executor.terminateStateOnError(state,
-				"ASSERTION FAIL: " + readStringAtAddress(state, arguments[0]),
-				"assert.err");
+		executor.raceCategory = Executor::HarmfulRace;
+//		executor.terminateStateOnError(state,
+//				"ASSERTION FAIL: " + readStringAtAddress(state, arguments[0]),
+//				"assert.err");
 }
 
 void SpecialFunctionHandler::handleReportError(ExecutionState &state,

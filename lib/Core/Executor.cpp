@@ -238,7 +238,7 @@ bool Executor::hasInitialized = false;
 Executor::Executor(const InterpreterOptions &opts, InterpreterHandler *ih) :
 		kmodule(0), interpreterHandler(ih), searcher(0), externalDispatcher(
 				new ExternalDispatcher()), Interpreter(opts), statsTracker(0), pathWriter(
-				0), symPathWriter(0), specialFunctionHandler(0),
+				0), symPathWriter(0), specialFunctionHandler(0),raceCategory(BenignRace),
 		//processTree(0),
 		replayOut(0), replayPath(0), usingSeeds(0), atMemoryLimit(false), inhibitForking(
 				false), haltExecution(false), ivcEnabled(false), coreSolverTimeout(
@@ -3064,6 +3064,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 									<< endl;
 							cerr
 									<< "thread state is MUTEX_BLOCKED, try to get lock but failed\n";
+							raceCategory = Executor::HarmfulRace;
 							isAbleToRun = false;
 							break;
 							//assert(0 && "thread state is MUTEX_BLOCKED, try to get lock but failed");
@@ -3109,6 +3110,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 			}
 			cerr << "thread unable to run, Id: " << thread->threadId
 					<< " state: " << thread->threadState << endl;
+			raceCategory = Executor::HarmfulRace;
 			terminateState(state);
 			break;
 			//assert(0 && "thread are unable to execute!");
@@ -3129,8 +3131,12 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 //    }
 		KInstruction *ki = thread->pc;
 //		ki->inst->dump();
+///////////////////////////////////////////////////////
+		/*
 		if (state.prefix && !state.prefix->isFinished() && ki != state.prefix->getCurrentInst()) {
-			//cerr << "prefix: " << prefix->getCurrentInst() << " " << prefix->getCurrentInst()->inst->getOpcodeName() << " reality: " << ki << " " << ki->inst->getOpcodeName() << endl;
+			//cerr << "prefix: " << prefix->getCurrentInst() << " " <<
+//				prefix->getCurrentInst()->inst->getOpcodeName() <<
+//					" reality: " << ki << " " << ki->inst->getOpcodeName() << endl;
 			cerr << "thread id : " << thread->threadId << "\n";
 			ki->inst->print(errs());
 			cerr << endl;
@@ -3148,6 +3154,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 			break;
 			//assert(0 && "prefix unmatched");
 		}
+		*/
 
 		stepInstruction(state);
 		if (!isSymbolicRun) {
@@ -3170,6 +3177,11 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 
 		executeInstruction(state, ki);
 
+		if (raceCategory == Executor::HarmfulRace ||
+				raceCategory == Executor::PossibleHarmfulRace) {
+			break;
+		}
+
 		if (isSymbolicRun) {
 			for (std::vector<BitcodeListener*>::iterator bit =
 					bitcodeListeners.begin(), bie = bitcodeListeners.end();
@@ -3185,6 +3197,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 				(*bit)->instructionExecuted(state, ki);
 			}
 		}
+
 		if (state.prefix) {
 			state.prefix->increase();
 		}
@@ -4799,6 +4812,20 @@ void Executor::runRaceDetect(llvm::Function *f, int argc, char **argv,
 			prepareSymbolicExecution();
 			runFunctionAsMain(f, argc, argv, envp);
 		}
+		if (executionNum > 0) {
+			string ErrorInfo;
+			raw_fd_ostream out_to_file("./output_info/statics.txt", ErrorInfo, 0x0202);
+			stringstream ss;
+			if (raceCategory == PossibleHarmfulRace)
+				ss << "race possible harmful\n";
+			else if (raceCategory == HarmfulRace)
+				ss << "race harmful\n";
+			else
+				ss << "race benign\n";
+			out_to_file << ss.str();
+			out_to_file.close();
+		}
+
 		prepareNextExecution();
 	}
 }
@@ -4844,6 +4871,7 @@ void Executor::prepareNextExecution() {
 	isSymbolicRun = 0;
 	Thread::nextThreadId = 1;
 	executionNum++;
+	raceCategory = BenignRace;
 	for (std::set<ExecutionState*>::const_iterator it = states.begin(), ie =
 			states.end(); it != ie; ++it) {
 		delete *it;

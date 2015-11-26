@@ -87,15 +87,24 @@ void Encode::buildAllFormula() {
 }
 
 
-
-void Encode::buildRaceFormula()
+void Encode::buildPartialRaceFormula()
 {
 	buildInitValueFormula();
 	buildPathCondition();
 	buildMemoryModelFormula();
 	buildPartialOrderFormula();
-	buildReadWriteFormula();
 	buildSynchronizeFormula();
+}
+
+
+void Encode::buildRaceFormula()
+{
+//	buildInitValueFormula();
+//	buildPathCondition();
+//	buildMemoryModelFormula();
+//	buildPartialOrderFormula();
+//	buildReadWriteFormula();
+//	buildSynchronizeFormula();
 //	std::cerr << "build race formula" << std::endl;
 }
 
@@ -408,7 +417,7 @@ void Encode::exchangeUnderEqual(vector<struct Pair> &altSequence, struct racePai
 void Encode::addReadWriteSet(struct globalEvent & opPair,
 		std::map<string, string> &record, std::set<string> &initializer_record)
 {
-	if (opPair.preEvent->isGlobal) {
+	if (opPair.preEvent != NULL && opPair.preEvent->isGlobal) {
 		string tmpStr = opPair.preEvent->varName;
 		if (opPair.preEvent->inst->inst->getOpcode() == Instruction::Load) {
 			if (trace->readSet.count(tmpStr) == 0 &&
@@ -456,7 +465,7 @@ void Encode::addReadWriteSet(struct globalEvent & opPair,
 //			initializer_record.insert(tmpStr);
 //		}
 	}
-	if (opPair.postEvent->isGlobal) {
+	if (opPair.postEvent != NULL && opPair.postEvent->isGlobal) {
 		string tmpStr = opPair.postEvent->varName;
 		if (opPair.postEvent->inst->inst->getOpcode() == Instruction::Load) {
 			if (trace->readSet.count(tmpStr) == 0 &&
@@ -580,7 +589,7 @@ void Encode::raceFromCandidate(vector<struct racePair> &raceCandidate)
 
 		z3_solver.push();
 		z3_solver.add( (temp1 && temp2) );
-		buildRaceFormula();
+		buildReadWriteFormula();
 
 		//add br constraint before the two race insts.
 		addBrConstraint(raceCandidate[i].event1.event);
@@ -668,7 +677,7 @@ void Encode::buildRaceTraceFromLockSet() {
 	vector<struct globalEvent> writeGlobalSet;
 
 	unsigned eventLen = trace->eventList.size();
-	std::cerr << "print the event inst made race happened\n";
+//	std::cerr << "print the event inst made race happened\n";
 	for (unsigned tid = 0; tid < eventLen; tid++) {
 		std::vector<Event*> *thread = trace->eventList[tid];
 		if (thread == NULL)
@@ -772,6 +781,7 @@ void Encode::getPossibleRaceTrace()
 	std::cerr << "getPossibleRaceTrace\n";
 //	buildRaceFormula();
 //	addBrConstraint();
+	buildPartialRaceFormula();
 	buildRaceTraceFromLockSet();
 //	buildRaceTrace();
 }
@@ -1697,7 +1707,7 @@ void Encode::buildMemoryModelFormula() {
 	//statics
 	formulaNum++;
 //level: 0 bitcode; 1 source code; 2 block
-	controlGranularity(0);
+	controlGranularity(2);
 //
 //initial and final
 	for (unsigned tid = 0; tid < trace->eventList.size(); tid++) {
