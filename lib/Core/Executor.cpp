@@ -3074,7 +3074,7 @@ void Executor::run(ExecutionState &initialState) {
 //    }
 		KInstruction *ki = thread->pc;
 		if (prefix && !prefix->isFinished() && ki != prefix->getCurrentInst()) {
-			//cerr << "prefix: " << prefix->getCurrentInst() << " " << prefix->getCurrentInst()->inst->getOpcodeName() << " reality: " << ki << " " << ki->inst->getOpcodeName() << endl;
+//			cerr << "prefix: " << prefix->getCurrentInst() << " " << prefix->getCurrentInst()->inst->getOpcodeName() << " reality: " << ki << " " << ki->inst->getOpcodeName() << endl;
 			cerr << "thread id : " << thread->threadId << "\n";
 			ki->inst->print(errs());
 			cerr << endl;
@@ -3130,16 +3130,21 @@ void Executor::run(ExecutionState &initialState) {
 			break;
 		}
 		processTimers(&state, MaxInstructionTime);
-		if (MaxMemory) {
+		if (MaxMemory && 1) {
 			if ((stats::instructions & 0xFFFF) == 0) {
 				// We need to avoid calling GetMallocUsage() often because it
 				// is O(elts on freelist). This is really bad since we start
 				// to pummel the freelist once we hit the memory cap.
 				unsigned mbs = util::GetTotalMallocUsage() >> 20;
 				if (mbs > MaxMemory) {
-					cerr << "mbs : " << mbs << " states.size() : " << states.size() << "\n";
-					if ((mbs > MaxMemory + 100) && 0) {
+					ki->inst->dump();
+					if (prefix && !prefix->isFinished()){
+						cerr << "prefix\n" ;
+					}
+					cerr << "error mbs : " << mbs << " states.size() : " << states.size() << "\n";
+					if ((mbs > MaxMemory + 100) && 1) {
 						// just guess at how many to kill
+						execStatus = IGNOREDERROR;
 						unsigned numStates = states.size();
 						unsigned toKill = std::max(1U,
 								numStates - numStates * MaxMemory / mbs);

@@ -458,80 +458,80 @@ void PSOListener::executeInstruction(ExecutionState &state, KInstruction *ki) {
 		item->condition = true;
 		Type* pointedTy =
 				gp->getPointerOperand()->getType()->getPointerElementType();
-		switch (pointedTy->getTypeID()) {
-		case Type::ArrayTyID: {
-			//只处理索引值是变量的getElementPtr属性，因为索引值是常量时其访问的元素不会随线程交织变化
-			if (inst->getOperand(2)->getValueID() != Value::ConstantIntVal) {
-				uint64_t num = pointedTy->getArrayNumElements();
-				uint64_t elementBitWidth =
-						executor->kmodule->targetData->getTypeSizeInBits(
-								pointedTy->getArrayElementType());
-				Expr* expr = executor->eval(ki, 0, thread).value.get();
-				ConstantExpr* cexpr = dyn_cast<ConstantExpr>(expr);
-				uint64_t base = cexpr->getZExtValue();
-				expr = executor->eval(ki, 2, thread).value.get();
-				cexpr = dyn_cast<ConstantExpr>(expr);
-				uint64_t selectedIndex = cexpr->getZExtValue();
-				VectorInfo* vectorInfo = new VectorInfo(base, elementBitWidth,
-						num, selectedIndex);
-				item->vectorInfo = vectorInfo;
-				getElementPtrRecord.insert(std::make_pair(inst, vectorInfo));
-			}
-			break;
-		}
-
-		case Type::HalfTyID:
-		case Type::FloatTyID:
-		case Type::DoubleTyID:
-		case Type::X86_FP80TyID:
-		case Type::FP128TyID:
-		case Type::PPC_FP128TyID:
-		case Type::IntegerTyID: {
-			if (inst->getOperand(1)->getValueID() != Value::ConstantIntVal) {
-				Type* pointedTy =
-						inst->getOperand(0)->getType()->getPointerElementType();
-				uint64_t elementBitWidth =
-						executor->kmodule->targetData->getTypeSizeInBits(
-								pointedTy);
-				Expr* expr = executor->eval(ki, 0, thread).value.get();
-				ConstantExpr* cexpr = dyn_cast<ConstantExpr>(expr);
-				uint64_t base = cexpr->getZExtValue();
-				expr = executor->eval(ki, 1, thread).value.get();
-				cexpr = dyn_cast<ConstantExpr>(expr);
-				uint64_t index = cexpr->getZExtValue();
-				uint64_t startAddress = base + index * elementBitWidth / 8;
-				ObjectPair op;
-//				cerr << "base = " << base << " index = " << index << " startAddress = " << startAddress << " pointerWidth = " << Context::get().getPointerWidth() << endl;
-				bool success = getMemoryObject(op, state,
-						ConstantExpr::create(startAddress,
-								Context::get().getPointerWidth()));
-				if (success) {
-					const MemoryObject* mo = op.first;
-					uint64_t elementNum = mo->size / (elementBitWidth / 8);
-					if (elementNum > 1) {
-						uint64_t selectedIndex = (startAddress - mo->address)
-								/ (elementBitWidth / 8);
-						VectorInfo* vectorInfo = new VectorInfo(mo->address,
-								elementBitWidth, elementNum, selectedIndex);
-						item->vectorInfo = vectorInfo;
-						getElementPtrRecord.insert(
-								std::make_pair(inst, vectorInfo));
-					}
-				} else {
-					inst->dump();
-					cerr << "access address: " << startAddress
-							<< "has not been allocated" << endl;
-					//assert(0 && "the address has not been allocated");
-				}
-			}
-			break;
-		}
-
-		default: {
-			//cerr << "unhandled type " << pointedTy->getTypeID() << endl;
-		}
-
-		}
+//		switch (pointedTy->getTypeID()) {
+//		case Type::ArrayTyID: {
+//			//只处理索引值是变量的getElementPtr属性，因为索引值是常量时其访问的元素不会随线程交织变化
+//			if (inst->getOperand(2)->getValueID() != Value::ConstantIntVal) {
+//				uint64_t num = pointedTy->getArrayNumElements();
+//				uint64_t elementBitWidth =
+//						executor->kmodule->targetData->getTypeSizeInBits(
+//								pointedTy->getArrayElementType());
+//				Expr* expr = executor->eval(ki, 0, thread).value.get();
+//				ConstantExpr* cexpr = dyn_cast<ConstantExpr>(expr);
+//				uint64_t base = cexpr->getZExtValue();
+//				expr = executor->eval(ki, 2, thread).value.get();
+//				cexpr = dyn_cast<ConstantExpr>(expr);
+//				uint64_t selectedIndex = cexpr->getZExtValue();
+//				VectorInfo* vectorInfo = new VectorInfo(base, elementBitWidth,
+//						num, selectedIndex);
+//				item->vectorInfo = vectorInfo;
+//				getElementPtrRecord.insert(std::make_pair(inst, vectorInfo));
+//			}
+//			break;
+//		}
+//
+//		case Type::HalfTyID:
+//		case Type::FloatTyID:
+//		case Type::DoubleTyID:
+//		case Type::X86_FP80TyID:
+//		case Type::FP128TyID:
+//		case Type::PPC_FP128TyID:
+//		case Type::IntegerTyID: {
+//			if (inst->getOperand(1)->getValueID() != Value::ConstantIntVal) {
+//				Type* pointedTy =
+//						inst->getOperand(0)->getType()->getPointerElementType();
+//				uint64_t elementBitWidth =
+//						executor->kmodule->targetData->getTypeSizeInBits(
+//								pointedTy);
+//				Expr* expr = executor->eval(ki, 0, thread).value.get();
+//				ConstantExpr* cexpr = dyn_cast<ConstantExpr>(expr);
+//				uint64_t base = cexpr->getZExtValue();
+//				expr = executor->eval(ki, 1, thread).value.get();
+//				cexpr = dyn_cast<ConstantExpr>(expr);
+//				uint64_t index = cexpr->getZExtValue();
+//				uint64_t startAddress = base + index * elementBitWidth / 8;
+//				ObjectPair op;
+////				cerr << "base = " << base << " index = " << index << " startAddress = " << startAddress << " pointerWidth = " << Context::get().getPointerWidth() << endl;
+//				bool success = getMemoryObject(op, state,
+//						ConstantExpr::create(startAddress,
+//								Context::get().getPointerWidth()));
+//				if (success) {
+//					const MemoryObject* mo = op.first;
+//					uint64_t elementNum = mo->size / (elementBitWidth / 8);
+//					if (elementNum > 1) {
+//						uint64_t selectedIndex = (startAddress - mo->address)
+//								/ (elementBitWidth / 8);
+//						VectorInfo* vectorInfo = new VectorInfo(mo->address,
+//								elementBitWidth, elementNum, selectedIndex);
+//						item->vectorInfo = vectorInfo;
+//						getElementPtrRecord.insert(
+//								std::make_pair(inst, vectorInfo));
+//					}
+//				} else {
+//					inst->dump();
+//					cerr << "access address: " << startAddress
+//							<< "has not been allocated" << endl;
+//					//assert(0 && "the address has not been allocated");
+//				}
+//			}
+//			break;
+//		}
+//
+//		default: {
+//			//cerr << "unhandled type " << pointedTy->getTypeID() << endl;
+//		}
+//
+//		}
 		break;
 	}
 
@@ -936,6 +936,7 @@ void PSOListener::afterRunMethodAsMain() {
 	if (executor->isSymbolicRun == 0) {
 		if (executor->execStatus != Executor::SUCCESS) {
 			cerr << "######################执行有错误,放弃本次执行####################\n";
+			executor->isFinished = true;
 //			assert(0 && "debug");
 
 			//		if (rdManager.getCurrentTrace()->traceType == Trace::FAILED) {
