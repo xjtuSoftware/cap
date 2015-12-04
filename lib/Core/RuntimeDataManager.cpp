@@ -50,13 +50,31 @@ RuntimeDataManager::~RuntimeDataManager() {
 	ss << "TotalNewPath:" << testedTraceList.size() << "\n";
 	ss << "TotalOldPath:" << traceList.size() - testedTraceList.size() << "\n";
 	ss << "TotalPath:" << traceList.size() << "\n";
-	ss << "allGlobal:" << allGlobal * 1.0 / testedTraceList.size() << "\n";
-	ss << "brGlobal:" << brGlobal * 1.0 / testedTraceList.size()<< "\n";
-	ss << "AllBranch:" << satBranch + unSatBranch << "\n";
-	ss << "satBranch:" << satBranch << "\n";
-	ss << "satCost:" << satCost / satBranch << "\n";
+	if (testedTraceList.size()) {
+		ss << "allGlobal:" << allGlobal * 1.0 / testedTraceList.size() << "\n";
+		ss << "brGlobal:" << brGlobal * 1.0 / testedTraceList.size() << "\n";
+	} else {
+		ss << "allGlobal:0" << "\n";
+		ss << "brGlobal:0" << "\n";
+	}
+	if (testedTraceList.size()) {
+		ss << "AllBranch:" << ( satBranch + unSatBranch ) * 1.0 / testedTraceList.size() << "\n";
+		ss << "satBranch:" << satBranch * 1.0 / testedTraceList.size() << "\n";
+	} else {
+		ss << "AllBranch:0" << "\n";
+		ss << "satBranch:0" << "\n";
+	}
+	if (satBranch) {
+		ss << "satCost:" << satCost / satBranch << "\n";
+	} else {
+		ss << "satCost:0" << "\n";
+	}
 	ss << "unSatBranch:" << unSatBranch << "\n";
-	ss << "unSatCost:" << unSatCost / unSatBranch << "\n";
+	if (unSatBranch) {
+		ss << "unSatCost:" << unSatCost / unSatBranch << "\n";
+	} else {
+		ss << "unSatCost:0" << "\n";
+	}
 	ss << "SolvingCost:" << solvingCost << "\n";
 	ss << "RunningCost:" << runningCost << "\n";
 	out_to_file << ss.str();
