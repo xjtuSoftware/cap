@@ -35,6 +35,7 @@ public:
 	virtual void testForKquery2Z3() = 0;
 	virtual void getGlobalSymbolic() = 0;
 
+	virtual void getNewPrefix()  = 0;
 };
 
 }

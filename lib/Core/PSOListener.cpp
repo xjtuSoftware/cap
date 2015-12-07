@@ -981,6 +981,8 @@ void PSOListener::afterRunMethodAsMain() {
 		//initialize lockset algorithm needs data structure.
 		if (executor->executionNum == 0) {
 			Trace::LockSetDateStruct lsds;
+//			std::cerr << "size in after run function as main = " <<
+//					trace->global_variable_initializer.size() << std::endl;
 			for (std::map<std::string, llvm::Constant*>::iterator it =
 				trace->global_variable_initializer.begin(), ie = trace->global_variable_initializer.end();
 				it != ie; it++) {
@@ -2432,7 +2434,11 @@ void PSOListener::afterprepareSymbolicRun(ExecutionState &initialState) {
 		it->get()->dump();
 	}
 #endif
-	filter.filterUseless(trace);
+//	std::cerr << "symbolic in afterprepareSymbolicRun\n";
+	filter.copyCollectedDataOfTrace(trace);
+	filter.getGlobalFirstOrderRelated(trace);
+	filter.getGlobalVarRelatedLock(trace);
+//	filter.filterUseless(trace);
 #if DEBUGSYMBOLIC
 	std::cerr << "kQueryExpr = " << trace->kQueryExpr.size()
 	<< std::endl;

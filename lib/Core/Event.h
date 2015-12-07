@@ -78,6 +78,10 @@ public:
 	std::string condName; //access condition;
 	bool isIgnore; //whether ignore this event when detecting
 
+	//these preVarName and postVarName used for data race.
+	std::string preEventName;
+	std::string postEventName;
+
 
 	//2015.7.8 hy
 //	bool isArg;

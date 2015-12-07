@@ -141,6 +141,7 @@ public:
 
 	//锁操作集合，以lock/unlock为对收集-->生成同步语义约束
 	std::map<std::string, std::vector<LockPair *> > all_lock_unlock; //key--mutex（锁名，一个地址就ok，每个锁全局必唯一）, value--the whole lock/unlock pairs with respect to one mutex
+	std::map<std::string, std::vector<LockPair *> > copy_all_lock_unlock;
 	//条件变量操作
 	std::map<std::string, std::vector<Wait_Lock *> > all_wait;//key--condition 变量标识, value--the whole wait events that wait this conditional var
 	std::map<std::string, std::vector<Event *> > all_signal;//key--condition 变量标识, value--the whole signal events that signal this conditional var
@@ -162,6 +163,12 @@ public:
 	std::map<unsigned, std::vector<std::string> > writeLocksHelds;
 
 	std::set<std::string> raceCandidateVar;
+
+	std::map<std::string, std::set<std::string> > globalVarFirstOrderRelated;
+	std::set<std::string> usefulGlobalVar;
+	std::map<std::string, std::set<std::string> > globalVarRelatedLock;
+	std::vector<std::string> remainingExprVarName;
+	std::vector<ref<klee::Expr> > remainingExpr;
 
 };
 

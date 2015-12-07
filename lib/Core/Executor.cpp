@@ -2923,7 +2923,6 @@ void Executor::bindModuleConstants() {
 }
 
 void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
-
 	bindModuleConstants();
 
 	// Delay init till now so that ticks don't accrue during
@@ -3006,7 +3005,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 
 	searcher->update(0, states, std::set<ExecutionState*>());
 
-	if (!isSymbolicRun) {
+	if (!isSymbolicRun && executionNum == 0) {
 		for (std::vector<BitcodeListener*>::iterator bit =
 				bitcodeListeners.begin(), bie = bitcodeListeners.end();
 				bit != bie; ++bit) {
@@ -3034,6 +3033,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 			(*bit)->afterPreparation();
 		}
 	}
+
 
 
 
@@ -3132,32 +3132,36 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 		KInstruction *ki = thread->pc;
 //		ki->inst->dump();
 ///////////////////////////////////////////////////////
-		/*
+
 		if (state.prefix && !state.prefix->isFinished() && ki != state.prefix->getCurrentInst()) {
 			//cerr << "prefix: " << prefix->getCurrentInst() << " " <<
 //				prefix->getCurrentInst()->inst->getOpcodeName() <<
 //					" reality: " << ki << " " << ki->inst->getOpcodeName() << endl;
-			cerr << "thread id : " << thread->threadId << "\n";
-			ki->inst->print(errs());
-			cerr << endl;
-			state.prefix->getCurrentInst()->inst->print(errs());
-			cerr << endl;
-			cerr << "prefix unmatched\n";
+//			cerr << "thread id : " << thread->threadId << "\n";
+//			ki->inst->print(errs());
+//			cerr << endl;
+//			state.prefix->getCurrentInst()->inst->print(errs());
+//			cerr << endl;
+//			cerr << "prefix unmatched\n";
+			if (raceCategory == Executor::BenignRace)
+				raceCategory = Executor::PossibleHarmfulRace;
 //			searcher->removeState(&state);
 //			std::set<ExecutionState*> es;
 //			es.insert(&state);
 //			searcher->update(0, std::set<ExecutionState*>(), es);
 //			std::cerr << "states size = " << states.size() << std::endl;
 //			continue;
+			/*
 			execStatus = IGNOREDERROR;
 			terminateState(state);
 			break;
+			*/
 			//assert(0 && "prefix unmatched");
 		}
-		*/
+
 
 		stepInstruction(state);
-		if (!isSymbolicRun) {
+		if (!isSymbolicRun && executionNum == 0) {
 			for (std::vector<BitcodeListener*>::iterator bit =
 					bitcodeListeners.begin(), bie = bitcodeListeners.end();
 					bit != bie; ++bit) {
@@ -3280,10 +3284,19 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 	}
 
 	if (1) {
-		for (std::vector<BitcodeListener*>::iterator bit =
-				bitcodeListeners.begin(), bie = bitcodeListeners.end();
-				bit != bie; ++bit) {
-			(*bit)->afterRunMethodAsMain();
+		if (executionNum == 0) {
+//			std::cerr << "executionNum = 0" << std::endl;
+			for (std::vector<BitcodeListener*>::iterator bit =
+					bitcodeListeners.begin(), bie = bitcodeListeners.end();
+					bit != bie; ++bit) {
+				(*bit)->afterRunMethodAsMain();
+			}
+		} else {
+			for (std::vector<BitcodeListener*>::iterator bit =
+					bitcodeListeners.begin(), bie = bitcodeListeners.end();
+					bit != bie; ++bit) {
+				(*bit)->getNewPrefix();
+			}
 		}
 	}
 
@@ -3291,7 +3304,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 		for (std::set<ExecutionState*>::iterator it = states.begin(), ie =
 				states.end(); it != ie; ++it) {
 			ExecutionState &state = **it;
-			stepInstruction(state); // keep stats rolling
+//			stepInstruction(state); // keep stats rolling
 			terminateStateEarly(state, "Execution halting.");
 		}
 		updateStates(0);
@@ -4805,7 +4818,7 @@ void Executor::createSpecialElement(ExecutionState& state, Type* type,
 
 void Executor::runRaceDetect(llvm::Function *f, int argc, char **argv,
 		char **envp) {
-	while (!isFinished && execStatus != RUNTIMEERROR) {
+	while (!isFinished) {
 		execStatus = SUCCESS;
 		runFunctionAsMain(f,argc, argv, envp);
 		if (isSymbolicRun && executionNum == 0) {
@@ -4825,7 +4838,6 @@ void Executor::runRaceDetect(llvm::Function *f, int argc, char **argv,
 			out_to_file << ss.str();
 			out_to_file.close();
 		}
-
 		prepareNextExecution();
 	}
 }

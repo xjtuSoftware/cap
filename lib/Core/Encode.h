@@ -77,17 +77,30 @@ public:
 	void getRaceCandidate(vector<struct globalEvent> &readGlobalSet,
 			vector<struct globalEvent> &writeGlobalSet);
 	void raceFromCandidate(vector<struct racePair> &raceCandidate);
-	void getAltSequence(vector<struct Pair> &, struct racePair &, struct OrderPair &);
+	void getAltSequence(vector<struct Pair> &, struct racePair &, struct OrderPair &, z3::model &m);
 	void getPossibleRaceTrace();
 	void getEventSequence(vector<struct Pair> &, vector<Event *> &, Event *, Event *);
 	void exchangeUnderEqual(vector<struct Pair> &, struct racePair &);
 	void addReadWriteSet(struct globalEvent &, std::map<string, string> &, std::set<string> &);
 	void deleteReadWriteSet(map<string, string> &, std::set<string> &);
 	void buildPartialRaceFormula();
+	void getDataFromCopy();
+
+	std::string getVarName(ref<Expr> value);
+	std::string getFullName(ref<Expr> value);
+	void getGlobalFirstOrderRelated(Trace* trace);
+	void getUsefulGlobalVar(Trace * trace, std::string);
+	void getUsefulReadWriteSet(Trace* trace, std::string);
+	void getGlobalVarRelatedLock(Trace* trace);
+	void getUsefulLockPair(Trace* trace);
+	void getPathCondition(Trace* trace);
+
+	void reconstructExprs(std::string );
 
 
 private:
 
+	void resolveGlobalVarName(ref<Expr> value);
 	////////////////////////////////modify this sagment at the end/////////////////////////
 	vector<pair<expr, expr> > globalOutputFormula;
 	//first--equality, second--constrait which equality must satisfy.
@@ -133,6 +146,10 @@ private:
 	void logStatisticInfo();
 
 	void controlGranularity(int level);
+	void repartitionGranularity(int &uniqueNum);
+	void rebuildMemoryModel();
+	void getUsefulBr();
+	void rebuildPathCondition();
 
 };
 

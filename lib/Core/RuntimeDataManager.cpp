@@ -50,7 +50,7 @@ RuntimeDataManager::~RuntimeDataManager() {
 //	ss << "TotalOldPath:" << traceList.size() - testedTraceList.size() << "\n";
 	ss << "SolvingCost:" << solvingCost << "\n";
 	ss << "RunningCost:" << runningCost << "\n";
-	ss << "SolvingTimes:" << solvingTimes << "\n";
+//	ss << "SolvingTimes:" << solvingTimes << "\n";
 	ss << "AllFormulaNum:" << allFormulaNum << "\n";
 //	ss << "allGlobal:" << allGlobal * 1.0 / testedTraceList.size() << "\n";
 //	ss << "brGlobal:" << brGlobal * 1.0 / testedTraceList.size()<< "\n";

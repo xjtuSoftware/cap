@@ -93,6 +93,8 @@ public:
 	virtual void testForKquery2Z3();
 	virtual void getGlobalSymbolic();
 
+	virtual void getNewPrefix();
+
 
 private:
 	Executor* executor;
@@ -142,7 +144,7 @@ private:
 			std::string name, unsigned size, bool isFloat);
 	void storeZeroToExpr(ExecutionState& state, ref<Expr> address, Expr::Width type);
 	ref<Expr> readExpr(ExecutionState &state, ref<Expr> address, Expr::Width size);
-	void getNewPrefix();
+
 
 	std::string createVarName(unsigned memoryId, ref<Expr> address, bool isGlobal) {
 		char signal;
