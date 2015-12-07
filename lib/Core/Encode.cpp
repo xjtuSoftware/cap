@@ -190,8 +190,6 @@ bool Encode::verify() {
 				cerr << "Assert Failure at "
 						<< assertFormula[i].first->inst->info->file << ": "
 						<< assertFormula[i].first->inst->info->line << "\n";
-				runtimeData.satBranch++;
-				runtimeData.satCost += cost;
 #if FORMULA_DEBUG
 				showPrefixInfo(prefix, assertFormula[i].first);
 #endif
@@ -213,7 +211,6 @@ bool Encode::verify() {
 		} else if (result == z3::unsat) {
 #if BRANCH_INFO
 			cerr << "No!\n";
-			runtimeData.unSatBranch++;
 #endif
 		}
 		z3_solver.pop();	//backtrack point 2
