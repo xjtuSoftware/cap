@@ -8,9 +8,12 @@
 #ifndef RUNTIMEDATAMANAGER_H_
 #define RUNTIMEDATAMANAGER_H_
 
+#include "klee/Internal/Module/KInstruction.h"
+
 #include "Trace.h"
 #include "Prefix.h"
 #include <set>
+#include <map>
 namespace klee {
 
 class RuntimeDataManager {

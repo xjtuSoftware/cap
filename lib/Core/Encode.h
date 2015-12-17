@@ -10,6 +10,7 @@
 
 #include "Event.h"
 #include "RuntimeDataManager.h"
+#include "DealWithSymbolicExpr.h"
 #include "Trace.h"
 #include <z3++.h>
 #include <stack>
@@ -28,6 +29,7 @@ private:
 	Trace* trace; //all data about encoding
 	context& z3_ctx;
 	solver& z3_solver;
+	DealWithSymbolicExpr filter;
 	double solvingCost;
 	unsigned formulaNum;
 	unsigned solvingTimes;
@@ -77,7 +79,8 @@ public:
 	void getRaceCandidate(vector<struct globalEvent> &readGlobalSet,
 			vector<struct globalEvent> &writeGlobalSet);
 	void raceFromCandidate(vector<struct racePair> &raceCandidate);
-	void getAltSequence(vector<struct Pair> &, struct racePair &, struct OrderPair &, z3::model &m);
+	void getAltSequence(vector<struct Pair> &, struct racePair &,
+			struct OrderPair &, z3::model &m);
 	void getPossibleRaceTrace();
 	void getEventSequence(vector<struct Pair> &, vector<Event *> &, Event *, Event *);
 	void exchangeUnderEqual(vector<struct Pair> &, struct racePair &);
@@ -97,6 +100,9 @@ public:
 
 	void reconstructExprs(std::string );
 
+	void computeTrimedRaceTrace(vector<struct racePair> &raceCandidate);
+	int getTotalInstOfTrace();
+
 
 private:
 
@@ -107,6 +113,7 @@ private:
 
 	vector<pair<Event*, expr> > ifFormula;
 	vector<pair<Event*, expr> > assertFormula;
+	vector<pair<Event*, expr> > rwFormula;
 
 	void buildInitValueFormula();
 	void buildPathCondition();
@@ -150,6 +157,9 @@ private:
 	void rebuildMemoryModel();
 	void getUsefulBr();
 	void rebuildPathCondition();
+
+	void makeUnrelatedConcrete(std::string, Event *);
+	void makePreEventConcrete(Event *, Event *);
 
 };
 

@@ -491,6 +491,7 @@ private:
   //bool isExecutionSuccess; // whether the latest execution is success
 
   unsigned executionNum; // total number of execution
+  bool monitorOutputFlag;
 
   static bool hasInitialized;
 

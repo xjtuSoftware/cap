@@ -26,6 +26,7 @@ private:
 	std::map<Event*, uint64_t> threadIdMap;
 	EventIterator pos;
 	std::string name;
+	unsigned posRace;
 
 public:
 	Prefix(std::vector<Event*>& eventList, std::map<Event*, uint64_t>& threadIdMap, std::string name);
@@ -43,6 +44,8 @@ public:
 	void print(llvm::raw_ostream &out);
 	KInstruction* getCurrentInst();
 	std::string getName();
+	void setRacePos(int);
+	unsigned getRacePos();
 };
 
 } /* namespace klee */

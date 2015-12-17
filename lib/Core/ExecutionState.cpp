@@ -98,7 +98,9 @@ ExecutionState::ExecutionState(KFunction *kf)
     instsSinceCovNew(0),
     coveredNew(false),
 	countThread(1),
+	monitorStart(0),
 	prefix(0),
+	totalInst(0),
     forkDisabled(false),
 	mutexManager(),
 	condManager()
@@ -122,7 +124,9 @@ ExecutionState::ExecutionState(KFunction *kf, Prefix* prefix)
     weight(1),
     instsSinceCovNew(0),
 	prefix(prefix),
+	totalInst(0),
 	countThread(1),
+	monitorStart(0),
     coveredNew(false),
     forkDisabled(false),
 	mutexManager(),
@@ -187,7 +191,9 @@ ExecutionState::ExecutionState(const ExecutionState& state)
     symbolics(state.symbolics),
     arrayNames(state.arrayNames),
 	prefix(state.prefix),
+	totalInst(state.totalInst),
 	countThread(state.countThread),
+	monitorStart(state.monitorStart),
     shadowObjects(state.shadowObjects),
 	mutexManager(state.mutexManager),
 	condManager(state.condManager)
@@ -457,6 +463,13 @@ Thread* ExecutionState::getNextThread() {
 	}
 	currentThread = nextThread;
 	return nextThread;
+}
+
+unsigned ExecutionState::getEventId()
+{
+	unsigned ret = 0;
+	ret = threadScheduler->getEventId();
+	return ret;
 }
 
 bool ExecutionState::examineAllThreadFinalState() {

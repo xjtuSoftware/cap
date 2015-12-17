@@ -336,6 +336,7 @@ void SpecialFunctionHandler::handleAssertFail(ExecutionState &state,
 				<< readStringAtAddress(state, arguments[0]) << "\n";
 		executor.terminateState(state);
 	} else
+		std::cerr << "harmful race assert fail\n";
 		executor.raceCategory = Executor::HarmfulRace;
 //		executor.terminateStateOnError(state,
 //				"ASSERTION FAIL: " + readStringAtAddress(state, arguments[0]),

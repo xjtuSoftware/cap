@@ -96,6 +96,7 @@ public:
   //added by PeiLIU
   Prefix * prefix;
   unsigned countThread;
+  int totalInst;
 
   bool coveredNew;
 
@@ -142,6 +143,7 @@ public:
   ThreadScheduler* threadScheduler;
   ThreadList threadList;
   Thread* currentThread;
+  bool monitorStart;
 
 
   MutexManager mutexManager;
@@ -216,6 +218,8 @@ public:
   void reSchedule();
 
   void dumpStack(std::ostream &out) const;
+
+  unsigned getEventId();
 
 //  bool isRunnable() {
 //	  return threadState == RUNNABLE;

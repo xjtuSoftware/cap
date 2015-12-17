@@ -36,6 +36,7 @@ public:
 	virtual void removeItem(Thread* item) = 0;
 	virtual void printAllItem(std::ostream &os) = 0;
 	virtual void reSchedule() = 0;
+	virtual unsigned getEventId() = 0;
 
 	enum ThreadSchedulerType {
 		RR,
@@ -69,6 +70,7 @@ public:
 	void printAllItem(std::ostream &os);
 	void reSchedule();
 	void setCountZero();
+	unsigned getEventId();
 
 };
 
@@ -95,7 +97,7 @@ public:
 	void removeItem(Thread* item);
 	void printAllItem(std::ostream &os);
 	void reSchedule();
-
+	unsigned getEventId();
 };
 
 class PreemptiveThreadScheduler : public ThreadScheduler {
@@ -119,7 +121,7 @@ public:
 	void removeItem(Thread* item);
 	void printAllItem(std::ostream &os);
 	void reSchedule();
-
+	unsigned getEventId();
 };
 
 class GuidedThreadScheduler : public ThreadScheduler {
@@ -145,6 +147,7 @@ public:
 	void removeItem(Thread* item);
 	void printAllItem(std::ostream &os);
 	void reSchedule();
+	unsigned getEventId();
 };
 
 ThreadScheduler* getThreadSchedulerByType(ThreadScheduler::ThreadSchedulerType type);

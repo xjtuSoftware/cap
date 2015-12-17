@@ -249,7 +249,7 @@ Executor::Executor(const InterpreterOptions &opts, InterpreterHandler *ih) :
 		isFinished(false), prefix(NULL), prefix1(NULL), isSymbolicRun(
 				false),
 		//isExecutionSuccess(true),
-		executionNum(0), execStatus(SUCCESS) {
+		executionNum(0), monitorOutputFlag(0), execStatus(SUCCESS) {
 	if (coreSolverTimeout)
 		UseForkedCoreSolver = true;
 //	condManager.setExecutor(this);
@@ -3005,7 +3005,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 
 	searcher->update(0, states, std::set<ExecutionState*>());
 
-	if (!isSymbolicRun && executionNum == 0) {
+	if (!isSymbolicRun) {
 		for (std::vector<BitcodeListener*>::iterator bit =
 				bitcodeListeners.begin(), bie = bitcodeListeners.end();
 				bit != bie; ++bit) {
@@ -3035,11 +3035,25 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 	}
 
 
-
+	this->monitorOutputFlag = false;
 
 	while (!states.empty() && !haltExecution) {
 		ExecutionState &state = searcher->selectState();
 		Thread* thread = state.getNextThread();
+		if (states.size() > 1 && !monitorOutputFlag) {
+//			std::cerr << "states.size = " << states.size() << std::endl;
+			unsigned i = 0;
+			for (std::set<ExecutionState*>::const_iterator it = states.begin(), ie =
+					states.end(); it != ie; ++it) {
+				if ((*it)->monitorStart) {
+					i++;
+				}
+			}
+//			std::cerr << "set monitorOutputFlag true\n";
+			if (i == states.size()) {
+				monitorOutputFlag = true;
+			}
+		}
 		bool isAbleToRun = true;
 		switch (thread->threadState) {
 		case Thread::RUNNABLE: {
@@ -3131,6 +3145,12 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 //    }
 		KInstruction *ki = thread->pc;
 //		ki->inst->dump();
+		if (states.size() > 1 && !state.monitorStart) {
+			if (state.prefix->getRacePos() ==
+					state.getEventId()) {
+				state.monitorStart = true;
+			}
+		}
 ///////////////////////////////////////////////////////
 
 		if (state.prefix && !state.prefix->isFinished() && ki != state.prefix->getCurrentInst()) {
@@ -3142,7 +3162,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 //			cerr << endl;
 //			state.prefix->getCurrentInst()->inst->print(errs());
 //			cerr << endl;
-//			cerr << "prefix unmatched\n";
+			cerr << "prefix unmatched\n";
 			if (raceCategory == Executor::BenignRace)
 				raceCategory = Executor::PossibleHarmfulRace;
 //			searcher->removeState(&state);
@@ -3161,7 +3181,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 
 
 		stepInstruction(state);
-		if (!isSymbolicRun && executionNum == 0) {
+		if (!isSymbolicRun) {
 			for (std::vector<BitcodeListener*>::iterator bit =
 					bitcodeListeners.begin(), bie = bitcodeListeners.end();
 					bit != bie; ++bit) {
@@ -3180,6 +3200,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 
 
 		executeInstruction(state, ki);
+		state.totalInst++;
 
 		if (raceCategory == Executor::HarmfulRace ||
 				raceCategory == Executor::PossibleHarmfulRace) {
@@ -3264,6 +3285,19 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 		}
 		updateStates(&state);
 	}
+	if (states.size() > 1) {
+//		string ErrorInfo;
+//		raw_fd_ostream out_to_file("./output_info/statics.txt", ErrorInfo, 0x0202);
+//		stringstream ss;
+		for (std::set<ExecutionState*>::const_iterator it = states.begin(), ie =
+				states.end(); it != ie; ++it) {
+			std::cerr << "totalInst = " << (*it)->totalInst << std::endl;
+//			ss << "totalInst : " << (*it)->totalInst << "\n";
+//			out_to_file << ss.str();
+			break;
+		}
+//		out_to_file.close();
+	}
 	delete searcher;
 	searcher = 0;
 
@@ -3309,6 +3343,7 @@ void Executor::run(ExecutionState &initialState, ExecutionState &twinState) {
 		}
 		updateStates(0);
 	}
+
 }
 
 std::string Executor::getAddressInfo(ExecutionState &state,

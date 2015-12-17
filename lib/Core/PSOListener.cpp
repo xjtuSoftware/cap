@@ -58,6 +58,7 @@ bool kleeBr;
 
 static int resFlag = 0;
 static std::vector<string> vecOutRes;
+static std::vector<string> vecOutToFile;
 
 PSOListener::PSOListener(Executor* executor) :
 		BitcodeListener(), executor(executor), temporalVariableID(0) {
@@ -995,6 +996,7 @@ void PSOListener::afterRunMethodAsMain() {
 		}
 
 		//this statement could remove meaningless.
+
 		getNewPrefix();
 	} else if (executor->isSymbolicRun == 1) {
 		rdManager.getCurrentTrace()->traceType = Trace::UNIQUE;
@@ -1031,6 +1033,7 @@ void PSOListener::afterRunMethodAsMain() {
 		double cost = (double) (finish.tv_sec * 1000000UL + finish.tv_usec
 				- start.tv_sec * 1000000UL - start.tv_usec) / 1000000UL;
 		rdManager.solvingCost += cost;
+
 		getNewPrefix();
 	}
 
@@ -1323,11 +1326,12 @@ void PSOListener::handleExternalFunction(ExecutionState& state,
 	Function *f = lastEvent->calledFunction;
 
 
-	if (state.prefix) {
+	if (state.prefix && executor->monitorOutputFlag) {
 	CallSite cs(inst);
 	unsigned numArgs = cs.arg_size();
 
 	if (f->getName() == "printf") {
+//		std::cerr << "function of printf\n";
 		for (unsigned i = 2; i <= numArgs; i++) {
 			ref<Expr> temp = executor->eval(ki, i, state.currentThread).value;
 			ConstantExpr * ce = dyn_cast<ConstantExpr>(temp.get());
@@ -1340,6 +1344,11 @@ void PSOListener::handleExternalFunction(ExecutionState& state,
 //					std::cerr << vecOutRes[i] << std::endl;
 //				}
 				if (vecOutRes[i - 2] != tmpStr) {
+					std::cerr << "harmful race printf\n";
+					std::cerr << "vecOutFiles : " << vecOutRes[i - 2] <<
+							", tmpStr = " << tmpStr << std::endl;
+					std::cerr << "last event : " << lastEvent->eventId << std::endl;
+					lastEvent->inst->inst->dump();
 					executor->raceCategory = Executor::HarmfulRace;
 //					executor->terminateState(state);
 					break;
@@ -1350,6 +1359,38 @@ void PSOListener::handleExternalFunction(ExecutionState& state,
 		}
 		if (vecOutRes.size() != 0 && resFlag != 0)
 			vecOutRes.clear();
+		if (resFlag == 0)
+			resFlag++;
+		else
+			resFlag = 0;
+	}
+
+	if (f->getName() == "fprintf") {
+//		ki->inst->dump();
+		for (unsigned i = 3; i <= numArgs; i++) {
+			ref<Expr> temp = executor->eval(ki, i, state.currentThread).value;
+			ConstantExpr * ce = dyn_cast<ConstantExpr>(temp.get());
+			std::string tmpStr;
+			ce->toString(tmpStr);
+//			std::cerr << "tmpStr = " << tmpStr << std::endl;
+			if (resFlag == 0) {
+				vecOutToFile.push_back(tmpStr);
+			} else {
+//				for (int i = 0; i < vecOutRes.size(); i++) {
+//					std::cerr << vecOutRes[i] << std::endl;
+//				}
+				if (vecOutToFile[i - 3] != tmpStr) {
+					std::cerr << "race harmful sprintf\n";
+					executor->raceCategory = Executor::HarmfulRace;
+//					executor->terminateState(state);
+					break;
+				}
+
+			}
+
+		}
+		if (vecOutToFile.size() != 0 && resFlag != 0)
+			vecOutToFile.clear();
 		if (resFlag == 0)
 			resFlag++;
 		else
@@ -2149,6 +2190,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 									trace->locksHelds[(*currentEvent)->threadId]);
 							if (flag) {
 								trace->raceCandidateVar.insert((*currentEvent)->varName);
+								trace->raceCandidateEventName.insert((*currentEvent)->eventId);
 //								std::cerr << "Load Inst: a data race could happen on var " <<
 //										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 							}
@@ -2169,6 +2211,10 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 							(*currentEvent)->globalVarFullName, size, isFloat);
 					executor->setDestCell(thread, ki, symbolic);
 					symbolicMap[(*currentEvent)->globalVarFullName] = value;
+					ref<Expr> constraint = EqExpr::create(value, symbolic);
+//					cerr << "rwSymbolicExpr : " << constraint << "\n";
+					trace->rwSymbolicExpr.push_back(constraint);
+					trace->rwEvent.push_back(*currentEvent);
 //					cerr << "load globalVarFullName : " << (*currentEvent)->globalVarFullName << "\n";
 //					cerr << "load value : " << value << "\n";
 				}
@@ -2252,6 +2298,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 									trace->writeLocksHelds[(*currentEvent)->threadId]);
 							if (flag) {
 								trace->raceCandidateVar.insert((*currentEvent)->varName);
+								trace->raceCandidateEventName.insert((*currentEvent)->eventId);
 //								std::cerr << "Store Inst: a data race could happen on var " <<
 //										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 							}
@@ -2261,11 +2308,11 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 //								std::cerr << "Store Inst: candidateLock empty " <<
 //										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 //							} else {
-
 							flag = trace->computeIntersect(temp->candidateLock,
 									trace->writeLocksHelds[(*currentEvent)->threadId]);
 							if (flag) {
 								trace->raceCandidateVar.insert((*currentEvent)->varName);
+								trace->raceCandidateEventName.insert((*currentEvent)->eventId);
 //								std::cerr << "Store Inst: a data race could happen on var " <<
 //										(*currentEvent)->varName << ", eventName = " << (*currentEvent)->eventName << std::endl;
 							}
@@ -2305,6 +2352,7 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 				}
 				executor->setDestCell(state.currentThread, ki, returnValue);
 			}
+
 //			if (!executor->kmodule->functionMap[f] && !inst->getType()->isVoidTy()) {
 //				ref<Expr> value = executor->getDestCell(state.currentThread, ki).value;
 //				cerr << "value : " << value << "\n";
@@ -2368,13 +2416,17 @@ void PSOListener::afterSymbolicRun(ExecutionState &state, KInstruction *ki) {
 			if (f->getName() == "pthread_mutex_lock") {
 				trace->locksHelds[(*currentEvent)->threadId].push_back((*currentEvent)->mutexName);
 			} else if (f->getName() == "pthread_mutex_unlock") {
-				if (!trace->writeLocksHelds[(*currentEvent)->threadId].empty() &&
+//				std::cerr << "before with source code\n";
+				if ((!trace->writeLocksHelds[(*currentEvent)->threadId].empty()) &&
 						trace->writeLocksHelds.count((*currentEvent)->threadId) == 1 &&
 						(trace->locksHelds[(*currentEvent)->threadId].back() ==
 							trace->writeLocksHelds[(*currentEvent)->threadId].back())) {
+//					std::cerr << "before popback\n";
 					trace->writeLocksHelds[(*currentEvent)->threadId].pop_back();
+//					std::cerr << "after pop back\n";
 				}
 				trace->locksHelds[(*currentEvent)->threadId].pop_back();
+//				std::cerr << "after with source code\n";
 			}
 			break;
 		}
@@ -2435,10 +2487,10 @@ void PSOListener::afterprepareSymbolicRun(ExecutionState &initialState) {
 	}
 #endif
 //	std::cerr << "symbolic in afterprepareSymbolicRun\n";
-	filter.copyCollectedDataOfTrace(trace);
+//	filter.copyCollectedDataOfTrace(trace);
 	filter.getGlobalFirstOrderRelated(trace);
-	filter.getGlobalVarRelatedLock(trace);
-//	filter.filterUseless(trace);
+//	filter.getGlobalVarRelatedLock(trace);
+	filter.filterUseless(trace);
 #if DEBUGSYMBOLIC
 	std::cerr << "kQueryExpr = " << trace->kQueryExpr.size()
 	<< std::endl;

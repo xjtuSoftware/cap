@@ -133,6 +133,7 @@ void RRSearcher::update(ExecutionState *current,
       assert(ok && "invalid state removed");
     }
   }
+
 }
 
 

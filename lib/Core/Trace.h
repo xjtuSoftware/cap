@@ -79,6 +79,11 @@ public:
 	std::vector<ref<klee::Expr> > kQueryExpr;
 	std::vector<Event*> brEvent;
 	std::vector<Event*> assertEvent;
+	std::vector<Event*> rwEvent;
+	std::set<std::string> RelatedSymbolicExpr;
+	std::set<std::string> globalVarAllRelated;
+	std::vector<ref<klee::Expr> > rwSymbolicExpr;
+	std::map<std::string, std::set<std::string>* > varRelatedSymbolicExpr;
 
 	Trace();
 
@@ -163,6 +168,7 @@ public:
 	std::map<unsigned, std::vector<std::string> > writeLocksHelds;
 
 	std::set<std::string> raceCandidateVar;
+	std::set<unsigned> raceCandidateEventName;
 
 	std::map<std::string, std::set<std::string> > globalVarFirstOrderRelated;
 	std::set<std::string> usefulGlobalVar;

@@ -113,4 +113,14 @@ std::string Prefix::getName(){
 	return name;
 }
 
+void Prefix::setRacePos(int pos)
+{
+	this->posRace = pos;
+}
+
+unsigned Prefix::getRacePos()
+{
+	return this->posRace;
+}
+
 } /* namespace klee */

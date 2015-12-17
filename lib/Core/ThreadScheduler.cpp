@@ -8,7 +8,7 @@
 #include "ThreadScheduler.h"
 #include "Executor.h"
 #include "klee/ExecutionState.h"
-#define MAXINST 1000
+#define MAXINST 300
 
 using namespace::std;
 
@@ -127,6 +127,12 @@ void RRThreadScheduler::setCountZero() {
 	count = 0;
 }
 
+unsigned RRThreadScheduler::getEventId()
+{
+	unsigned ret = 0;
+	return ret;
+}
+
 FIFSThreadScheduler::FIFSThreadScheduler() {
 
 }
@@ -194,6 +200,12 @@ void FIFSThreadScheduler::reSchedule() {
 	Thread* thread = queue.front();
 	queue.pop_front();
 	queue.push_back(thread);
+}
+
+unsigned FIFSThreadScheduler::getEventId()
+{
+	unsigned ret = 0;
+	return ret;
 }
 
 PreemptiveThreadScheduler::PreemptiveThreadScheduler() {
@@ -267,6 +279,12 @@ void PreemptiveThreadScheduler::reSchedule() {
 	queue.insert(ti, thread);
 }
 
+unsigned PreemptiveThreadScheduler::getEventId()
+{
+	unsigned ret = 0;
+	return ret;
+}
+
 GuidedThreadScheduler::GuidedThreadScheduler(ExecutionState* state, ThreadSchedulerType schedulerType, Prefix* prefix)
 	: prefix(prefix),
 	  state(state) {
@@ -290,6 +308,15 @@ Thread* GuidedThreadScheduler::selectNextItem() {
 		thread = subScheduler->selectNextItem();
 	}
 	return thread;
+}
+
+unsigned GuidedThreadScheduler::getEventId()
+{
+	unsigned ret = 0;
+	if (!prefix->isFinished()) {
+		ret = (*prefix->current())->eventId;
+	}
+	return ret;
 }
 
 void GuidedThreadScheduler::popAllItem(vector<Thread*>& allItem) {
